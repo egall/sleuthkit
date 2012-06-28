@@ -26,6 +26,11 @@
 #include "tsk_fs_i.h"
 #include "tsk_fatfs.h"
 
+#define XTAF_SECTOR_SIZE 512
+#define XTAF_SECT_PER_FAT 64
+#define XTAF_FIRST_FAT_SECT 8
+#define XTAF_ROOT_SECT 116808 
+#define HD_VOID_AREA 8
 
 /*
  * Implementation NOTES 
@@ -755,45 +760,23 @@ fatfs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     else
         tsk_fprintf(hFile, "\n");
 
-    tsk_fprintf(hFile, "\nOEM Name: %c%c%c%c%c%c%c%c\n", sb->oemname[0],
-        sb->oemname[1], sb->oemname[2], sb->oemname[3], sb->oemname[4],
-        sb->oemname[5], sb->oemname[6], sb->oemname[7]);
-
-
     if (fatfs->fs_info.ftype != TSK_FS_TYPE_FAT32) {
-        tsk_fprintf(hFile, "Volume ID: 0x%" PRIx32 "\n",
-            tsk_getu32(fs->endian, sb->a.f16.vol_id));
-
-        tsk_fprintf(hFile,
-            "Volume Label (Boot Sector): %c%c%c%c%c%c%c%c%c%c%c\n",
-            sb->a.f16.vol_lab[0], sb->a.f16.vol_lab[1],
-            sb->a.f16.vol_lab[2], sb->a.f16.vol_lab[3],
-            sb->a.f16.vol_lab[4], sb->a.f16.vol_lab[5],
-            sb->a.f16.vol_lab[6], sb->a.f16.vol_lab[7],
-            sb->a.f16.vol_lab[8], sb->a.f16.vol_lab[9],
-            sb->a.f16.vol_lab[10]);
+        tsk_fprintf(hFile, "Serial number: 0x%" PRIx32 "\n",
+            tsk_getu32(fs->endian, sb->serial_number));
 
         if ((de) && (de->name)) {
             tsk_fprintf(hFile,
-                "Volume Label (Root Directory): %c%c%c%c%c%c%c%c%c%c%c\n",
+                "Volume Label (Root Directory): %c%c%c%c%c%c%c%c\n",
                 de->name[0], de->name[1], de->name[2], de->name[3],
-                de->name[4], de->name[5], de->name[6], de->name[7],
-                de->ext[0], de->ext[1], de->ext[2]);
+                de->name[4], de->name[5], de->name[6], de->name[7]);
         }
         else {
             tsk_fprintf(hFile, "Volume Label (Root Directory):\n");
         }
-
-        tsk_fprintf(hFile, "File System Type Label: %c%c%c%c%c%c%c%c\n",
-            sb->a.f16.fs_type[0], sb->a.f16.fs_type[1],
-            sb->a.f16.fs_type[2], sb->a.f16.fs_type[3],
-            sb->a.f16.fs_type[4], sb->a.f16.fs_type[5],
-            sb->a.f16.fs_type[6], sb->a.f16.fs_type[7]);
     }
     else {
 
         char *fat_fsinfo_buf;
-        fatfs_fsinfo *fat_info;
 
         if ((fat_fsinfo_buf = (char *)
                 tsk_malloc(sizeof(fatfs_fsinfo))) == NULL) {
@@ -801,77 +784,22 @@ fatfs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
             return 1;
         }
 
-        tsk_fprintf(hFile, "Volume ID: 0x%" PRIx32 "\n",
-            tsk_getu32(fs->endian, sb->a.f32.vol_id));
-
-        tsk_fprintf(hFile,
-            "Volume Label (Boot Sector): %c%c%c%c%c%c%c%c%c%c%c\n",
-            sb->a.f32.vol_lab[0], sb->a.f32.vol_lab[1],
-            sb->a.f32.vol_lab[2], sb->a.f32.vol_lab[3],
-            sb->a.f32.vol_lab[4], sb->a.f32.vol_lab[5],
-            sb->a.f32.vol_lab[6], sb->a.f32.vol_lab[7],
-            sb->a.f32.vol_lab[8], sb->a.f32.vol_lab[9],
-            sb->a.f32.vol_lab[10]);
+        tsk_fprintf(hFile, "Serial number: 0x%" PRIx32 "\n",
+            tsk_getu32(fs->endian, sb->serial_number));
 
         if ((de) && (de->name)) {
             tsk_fprintf(hFile,
-                "Volume Label (Root Directory): %c%c%c%c%c%c%c%c%c%c%c\n",
+                "Volume Label (Root Directory): %c%c%c%c%c%c%c%c\n",
                 de->name[0], de->name[1], de->name[2], de->name[3],
-                de->name[4], de->name[5], de->name[6], de->name[7],
-                de->ext[0], de->ext[1], de->ext[2]);
+                de->name[4], de->name[5], de->name[6], de->name[7]);
         }
         else {
             tsk_fprintf(hFile, "Volume Label (Root Directory):\n");
         }
 
-        tsk_fprintf(hFile, "File System Type Label: %c%c%c%c%c%c%c%c\n",
-            sb->a.f32.fs_type[0], sb->a.f32.fs_type[1],
-            sb->a.f32.fs_type[2], sb->a.f32.fs_type[3],
-            sb->a.f32.fs_type[4], sb->a.f32.fs_type[5],
-            sb->a.f32.fs_type[6], sb->a.f32.fs_type[7]);
-
-
-        /* Process the FS info */
-        if (tsk_getu16(fs->endian, sb->a.f32.fsinfo)) {
-            cnt =
-                tsk_fs_read_block(fs, (TSK_DADDR_T) tsk_getu16(fs->endian,
-                    sb->a.f32.fsinfo), fat_fsinfo_buf,
-                sizeof(fatfs_fsinfo));
-
-            if (cnt != sizeof(fatfs_fsinfo)) {
-                if (cnt >= 0) {
-                    tsk_error_reset();
-                    tsk_errno = TSK_ERR_FS_READ;
-                }
-                snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                    "fatfs_fsstat: TSK_FS_TYPE_FAT32 FSINFO block: %"
-                    PRIuDADDR, (TSK_DADDR_T) tsk_getu16(fs->endian,
-                        sb->a.f32.fsinfo));
-                free(data_buf);
-                free(fat_fsinfo_buf);
-                return 1;
-            }
-
-
-            fat_info = (fatfs_fsinfo *) fat_fsinfo_buf;
-            tsk_fprintf(hFile,
-                "Next Free Sector (FS Info): %" PRIuDADDR "\n",
-                FATFS_CLUST_2_SECT(fatfs, tsk_getu32(fs->endian,
-                        fat_info->nextfree)));
-
-            tsk_fprintf(hFile,
-                "Free Sector Count (FS Info): %" PRIu32 "\n",
-                (tsk_getu32(fs->endian,
-                        fat_info->freecnt) * fatfs->csize));
-
-            free(fat_fsinfo_buf);
-        }
     }
 
     free(data_buf);
-
-    tsk_fprintf(hFile, "\nSectors before file system: %" PRIu32 "\n",
-        tsk_getu32(fs->endian, sb->prevsect));
 
     tsk_fprintf(hFile, "\nFile System Layout (in sectors)\n");
 
@@ -887,14 +815,6 @@ fatfs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
         fatfs->firstfatsect - 1);
 
     tsk_fprintf(hFile, "** Boot Sector: 0\n");
-
-    if (fatfs->fs_info.ftype == TSK_FS_TYPE_FAT32) {
-        tsk_fprintf(hFile, "** FS Info Sector: %" PRIu16 "\n",
-            tsk_getu16(fs->endian, sb->a.f32.fsinfo));
-
-        tsk_fprintf(hFile, "** Backup Boot Sector: %" PRIu32 "\n",
-            tsk_getu32(fs->endian, sb->a.f32.bs_backup));
-    }
 
     for (i = 0; i < fatfs->numfat; i++) {
         TSK_DADDR_T base = fatfs->firstfatsect + i * (fatfs->sectperfat);
@@ -1308,6 +1228,7 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fatfs_sb *fatsb;
     TSK_DADDR_T sectors;
     ssize_t cnt;
+    uint32_t fsopen_numfat, fsopen_csize;
     int i;
 
     // clean up any error messages that are lying around
@@ -1352,6 +1273,7 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         else
             sb_off = 6 * img_info->sector_size; // the backup is located in sector 6
 
+
         cnt = tsk_fs_read(fs, sb_off, (char *) fatsb, len);
         if (cnt != len) {
             if (cnt >= 0) {
@@ -1364,6 +1286,7 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             free(fatfs);
             return NULL;
         }
+        if(!strncmp((char *) fatsb->magic, "XTAF", 4)) break;
 
         /* Check the magic value and ID endian ordering */
         if (tsk_fs_guessu16(fs, fatsb->magic, FATFS_FS_MAGIC)) {
@@ -1392,8 +1315,8 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->dev_bsize = img_info->sector_size;
 
     /* Calculate block sizes and layout info */
-    // sector size
-    fatfs->ssize = tsk_getu16(fs->endian, fatsb->ssize);
+    // sector size AJN NOTE: Hard-coded to 512 for now, see macro variable. Is that right?(TODO)
+    fatfs->ssize = XTAF_SECTOR_SIZE;
     if (fatfs->ssize == 512) {
         fatfs->ssize_sh = 9;
     }
@@ -1419,7 +1342,9 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 
     // cluster size 
-    fatfs->csize = fatsb->csize;
+    fsopen_csize = tsk_getu32(fs->endian, fatsb->csize);
+    if(fsopen_csize > 256) printf("Sectors per cluster is more than 256!\n");
+    fatfs->csize = (uint8_t) fsopen_csize; 
     if ((fatfs->csize != 0x01) &&
         (fatfs->csize != 0x02) &&
         (fatfs->csize != 0x04) &&
@@ -1438,7 +1363,9 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 
     // number of FAT tables
-    fatfs->numfat = fatsb->numfat;
+    fsopen_numfat = tsk_getu32(fs->endian, fatsb->numfat);
+    if(fsopen_numfat > 256) printf("Number of FATs is more than 256!\n");
+    fatfs->numfat = (uint8_t) fsopen_numfat;
     if ((fatfs->numfat == 0) || (fatfs->numfat > 8)) {
         fs->tag = 0;
         free(fatsb);
@@ -1452,18 +1379,90 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
     /* We can't do a sanity check on this b.c. TSK_FS_TYPE_FAT32 has a value of 0 */
     /* num of root entries */
-    fatfs->numroot = tsk_getu16(fs->endian, fatsb->numroot);
+    //fatfs->numroot = tsk_getu16(fs->endian, fatsb->numroot);
+    fatfs->numroot = (uint16_t) 1;
 
 
-    /* if sectors16 is 0, then the number of sectors is stored in sectors32 */
-    if (0 == (sectors = tsk_getu16(fs->endian, fatsb->sectors16)))
-        sectors = tsk_getu32(fs->endian, fatsb->sectors32);
+    sectors = (TSK_DADDR_T) img_info->size/XTAF_SECTOR_SIZE;
 
-    /* if secperfat16 is 0, then read sectperfat32 */
-    if (0 == (fatfs->sectperfat =
-            tsk_getu16(fs->endian, fatsb->sectperfat16)))
-        fatfs->sectperfat =
-            tsk_getu32(fs->endian, fatsb->a.f32.sectperfat32);
+    /* EQS NOTE: sectperfat is hardcoded for the second partition.
+                 I found this with hexedit:
+                 Offset of 2nd partition FAT  = 0x120eb1000
+                 Offset of 2nd partition root = 0x120eba000
+                                         - ____________
+                                                  0x9000
+                 However uxtaf.c shows the FAT size as being 0x8000
+                 There is an 8 sector buffer inbetween the FAT and 
+                 the root sect?
+    */
+
+
+    if(img_info->size == 146413464 || img_info->size == 4712496640 || img_info->size == 4846714880){
+//        printf("Partition 1\n");
+        fatfs->rootsect = 1176;
+        fatfs->sectperfat = (uint32_t) 1160;
+        fatfs->firstclustsect = 1240;
+        fatfs->clustcnt = (TSK_DADDR_T) 147910; 
+        fatfs->lastclust = (TSK_DADDR_T) 147891;
+    }else if(img_info->size == 2147483648 || offset == 0x80000){
+        printf("Partition 0x80000\n");
+        fatfs->rootsect = 528;
+        fatfs->sectperfat = (uint32_t) 512;
+        fatfs->firstclustsect = (TSK_DADDR_T) 592;
+        fatfs->clustcnt = (TSK_DADDR_T) 65536;
+        fatfs->lastclust = (TSK_DADDR_T) 65527;
+
+    }else if(img_info->size == 2348810240 || offset == 0x80080000){
+//        printf("Partition 0x80080000\n");
+        fatfs->rootsect = 2248;
+        fatfs->sectperfat = (uint32_t) 2240;
+        fatfs->firstclustsect = (TSK_DADDR_T) 2264;
+        fatfs->clustcnt = (TSK_DADDR_T) 65536;
+        fatfs->lastclust = (TSK_DADDR_T) 65527;
+
+    }else if(img_info->size == 216203264 || offset == 0x10C080000){
+//        printf("Partition 0x10C080000\n");
+        fatfs->rootsect = 64;
+        fatfs->sectperfat = (uint32_t) 56;
+        fatfs->firstclustsect = (TSK_DADDR_T) 96;
+        fatfs->clustcnt = (TSK_DADDR_T) 13196;
+        fatfs->lastclust = (TSK_DADDR_T) 13194;
+
+    }else if(img_info->size == 134217728 || offset == 0x118eb0000){
+//        printf("Partition 0x118eb0000\n");
+        fatfs->rootsect = 48;
+        fatfs->sectperfat = (uint32_t) 40;
+        fatfs->firstclustsect = (TSK_DADDR_T) 80;
+        fatfs->clustcnt = (TSK_DADDR_T) 8192;
+        fatfs->lastclust = (TSK_DADDR_T) 8190;
+   
+    }else if(img_info->size == 268435456 || offset == 0x120eb0000){
+//        printf("System partition\n");
+        fatfs->rootsect = 80;
+        fatfs->sectperfat = (uint32_t) XTAF_SECT_PER_FAT;
+        fatfs->firstclustsect = (TSK_DADDR_T) 112;
+        fatfs->clustcnt = (TSK_DADDR_T) 16384;
+        fatfs->lastclust = (TSK_DADDR_T) 16381;
+    }else if(img_info->size == 244943674880 || offset == 0x130eb0000){
+//        printf("Data Partition\n");
+        fatfs->rootsect = 116808;
+        fatfs->sectperfat = (uint32_t) 116800;
+        fatfs->firstclustsect = (TSK_DADDR_T) 116840;
+        fatfs->firstdatasect = fatfs->firstclustsect;
+        fatfs->clustcnt = (TSK_DADDR_T) 14950175;
+        fatfs->lastclust = (TSK_DADDR_T) 14946525;
+    }
+    else{
+        free(fatsb);
+        free(fatfs);
+        tsk_error_reset();
+        snprintf(tsk_errstr, TSK_ERRSTR_L,
+            "Partition was not valid\n");
+        return NULL;
+    }
+
+    fatfs->firstfatsect = XTAF_FIRST_FAT_SECT;
+
 
     if (fatfs->sectperfat == 0) {
         fs->tag = 0;
@@ -1475,8 +1474,6 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             "Not a FATFS file system (invalid sectors per FAT)");
         return NULL;
     }
-
-    fatfs->firstfatsect = tsk_getu16(fs->endian, fatsb->reserved);
     if ((fatfs->firstfatsect == 0) || (fatfs->firstfatsect > sectors)) {
         tsk_error_reset();
         tsk_errno = TSK_ERR_FS_WALK_RNG;
@@ -1500,8 +1497,12 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
      * the data area starts with clusters and the root directory
      * is somewhere in the data area
      */
-    fatfs->firstdatasect = fatfs->firstfatsect +
-        fatfs->sectperfat * fatfs->numfat;
+    /* There's a 8 sector void space between the FAT and the first data sector */
+//    fatfs->firstdatasect = HD_VOID_AREA + fatfs->firstfatsect +
+//        fatfs->sectperfat * fatfs->numfat;
+     fatfs->firstdatasect = fatfs->rootsect;
+     fatfs->firstclustsect = fatfs->firstdatasect + 32 + 0;
+
 
     /* The sector where the first cluster is located.  It will be used
      * to translate cluster addresses to sector addresses 
@@ -1510,14 +1511,14 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
      * it is after the root directory for TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16.  At this
      * point in the program, numroot is set to 0 for TSK_FS_TYPE_FAT32
      */
-    fatfs->firstclustsect = fatfs->firstdatasect +
-        ((fatfs->numroot * 32 + fatfs->ssize - 1) / fatfs->ssize);
 
     /* total number of clusters */
-    fatfs->clustcnt = (sectors - fatfs->firstclustsect) / fatfs->csize;
+//    fatfs->clustcnt = (sectors - fatfs->firstclustsect) / fatfs->csize;
+        
 
     /* the first cluster is #2, so the final cluster is: */
-    fatfs->lastclust = 1 + fatfs->clustcnt;
+//    fatfs->lastclust = 1 + fatfs->clustcnt;
+
 
 
     /* identify the FAT type by the total number of data clusters
@@ -1527,10 +1528,7 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
      */
     if (ftype == TSK_FS_TYPE_FAT_DETECT) {
 
-        if (fatfs->clustcnt < 4085) {
-            ftype = TSK_FS_TYPE_FAT12;
-        }
-        else if (fatfs->clustcnt < 65525) {
+        if (fatfs->clustcnt < 0xfff4) {
             ftype = TSK_FS_TYPE_FAT16;
         }
         else {
@@ -1554,6 +1552,7 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             return NULL;
         }
     }
+/*
 
     if ((ftype == TSK_FS_TYPE_FAT32) && (fatfs->numroot != 0)) {
         fs->tag = 0;
@@ -1576,6 +1575,8 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             "Invalid FAT image (numroot == 0, and not TSK_FS_TYPE_FAT32)");
         return NULL;
     }
+*/
+
 
 
     /* Set the mask to use on the cluster values */
@@ -1599,15 +1600,6 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         return NULL;
     }
     fs->duname = "Sector";
-
-    /* the root directories are always after the FAT for TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16,
-     * but are dynamically located for TSK_FS_TYPE_FAT32
-     */
-    if (ftype == TSK_FS_TYPE_FAT32)
-        fatfs->rootsect = FATFS_CLUST_2_SECT(fatfs,
-            tsk_getu32(fs->endian, fatsb->a.f32.rootclust));
-    else
-        fatfs->rootsect = fatfs->firstdatasect;
 
     for (i = 0; i < FAT_CACHE_N; i++) {
         fatfs->fatc_addr[i] = 0;
@@ -1656,14 +1648,15 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->inum_count = fs->last_inum - fs->first_inum + 1;
 
 
-    /* Volume ID */
+    /*
+     * Volume ID
+     * AJN NOTE: For XTAF, volume ID is replaced with serial number,
+     * which might not be distinct on the drive.
+     * (TODO: Refer to Bolt or our drive images.)
+     */
     for (fs->fs_id_used = 0; fs->fs_id_used < 4; fs->fs_id_used++) {
-        if (ftype == TSK_FS_TYPE_FAT32)
-            fs->fs_id[fs->fs_id_used] =
-                fatsb->a.f32.vol_id[fs->fs_id_used];
-        else
-            fs->fs_id[fs->fs_id_used] =
-                fatsb->a.f16.vol_id[fs->fs_id_used];
+        fs->fs_id[fs->fs_id_used] =
+            fatsb->serial_number[fs->fs_id_used];
     }
 
     /*
@@ -1693,8 +1686,9 @@ fatfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->jopen = fatfs_jopen;
     fs->journ_inum = 0;
 
+
     // initialize the caches
     fs->list_inum_named = NULL;
 
-    return (fs);
+    return fs;
 }

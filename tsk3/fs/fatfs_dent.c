@@ -199,6 +199,7 @@ fatfs_dent_parse_buf(FATFS_INFO * fatfs, TSK_FS_DIR * a_fs_dir, char *buf,
                         idx);
                 continue;
             }
+            
 
             /* Copy the directory entry into the TSK_FS_NAME structure */
             dir = (fatfs_dentry *) dep;
@@ -207,20 +208,21 @@ fatfs_dent_parse_buf(FATFS_INFO * fatfs, TSK_FS_DIR * a_fs_dir, char *buf,
 
             /* Take care of the name 
              * Copy a long name to a buffer and take action if it
-             * is a small name */
+             * is a small name 
+
             if ((dir->attrib & FATFS_ATTR_LFN) == FATFS_ATTR_LFN) {
                 fatfs_dentry_lfn *dirl = (fatfs_dentry_lfn *) dir;
 
-                /* Store the name in dinfo until we get the 8.3 name 
+                * Store the name in dinfo until we get the 8.3 name 
                  * Use the checksum to identify a new sequence 
-                 * */
+                 * *
                 if (((dirl->seq & FATFS_LFN_SEQ_FIRST)
                         && (dirl->seq != FATFS_SLOT_DELETED))
                     || (dirl->chksum != lfninfo.chk)) {
                     // @@@ Do a partial output here
 
 
-                    /* Reset the values */
+                    * Reset the values *
                     lfninfo.seq = dirl->seq & FATFS_LFN_SEQ_MASK;
                     lfninfo.chk = dirl->chksum;
                     lfninfo.start = FATFS_MAXNAMLEN_UTF8 - 1;
@@ -231,7 +233,7 @@ fatfs_dent_parse_buf(FATFS_INFO * fatfs, TSK_FS_DIR * a_fs_dir, char *buf,
 
                 }
 
-                /* Copy the UTF16 values starting at end of buffer */
+                * Copy the UTF16 values starting at end of buffer *
                 for (a = 3; a >= 0; a--) {
                     if ((lfninfo.start > 0))
                         lfninfo.name[lfninfo.start--] = dirl->part3[a];
@@ -248,23 +250,17 @@ fatfs_dent_parse_buf(FATFS_INFO * fatfs, TSK_FS_DIR * a_fs_dir, char *buf,
                 // Skip ahead until we get a new sequence num or the 8.3 name
                 continue;
             }
+*/
             /* Special case for volume label: name does not have an
              * extension and we add a note at the end that it is a label */
-            else if ((dir->attrib & FATFS_ATTR_VOLUME) ==
+            if ((dir->attrib & FATFS_ATTR_VOLUME) ==
                 FATFS_ATTR_VOLUME) {
                 a = 0;
 
-                for (b = 0; b < 8; b++) {
+                for (b = 0; b < 42; b++) {
+                    if(dir->name[b] < 33 || dir->name[b] > 126) break;
                     if ((dir->name[b] >= 0x20) && (dir->name[b] != 0xff)) {
                         fs_name->name[a++] = dir->name[b];
-                    }
-                    else {
-                        fs_name->name[a++] = '^';
-                    }
-                }
-                for (b = 0; b < 3; b++) {
-                    if ((dir->ext[b] >= 0x20) && (dir->ext[b] != 0xff)) {
-                        fs_name->name[a++] = dir->ext[b];
                     }
                     else {
                         fs_name->name[a++] = '^';
@@ -283,59 +279,16 @@ fatfs_dent_parse_buf(FATFS_INFO * fatfs, TSK_FS_DIR * a_fs_dir, char *buf,
             /* A short (8.3) entry */
             else {
                 char *name_ptr; // The dest location for the short name
+               
 
-                /* if we have a lfn, copy it into fs_name->name
-                 * and put the short name in fs_name->shrt_name */
-                if (lfninfo.start != FATFS_MAXNAMLEN_UTF8 - 1) {
-                    int retVal;
-
-                    /* @@@ Check the checksum */
-
-                    /* Convert the UTF16 to UTF8 */
-                    UTF16 *name16 =
-                        (UTF16 *) ((uintptr_t) & lfninfo.name[lfninfo.
-                            start + 1]);
-                    UTF8 *name8 = (UTF8 *) fs_name->name;
-
-                    retVal =
-                        tsk_UTF16toUTF8(fs->endian,
-                        (const UTF16 **) &name16,
-                        (UTF16 *) & lfninfo.name[FATFS_MAXNAMLEN_UTF8],
-                        &name8,
-                        (UTF8 *) ((uintptr_t) name8 +
-                            FATFS_MAXNAMLEN_UTF8), TSKlenientConversion);
-
-                    if (retVal != TSKconversionOK) {
-                        tsk_error_reset();
-                        tsk_errno = TSK_ERR_FS_UNICODE;
-                        snprintf(tsk_errstr, TSK_ERRSTR_L,
-                            "fatfs_parse: Error converting FAT LFN to UTF8: %d",
-                            retVal);
-                        continue;
-                    }
-
-                    /* Make sure it is NULL Terminated */
-                    if ((uintptr_t) name8 >
-                        (uintptr_t) fs_name->name + FATFS_MAXNAMLEN_UTF8)
-                        fs_name->name[FATFS_MAXNAMLEN_UTF8 - 1] = '\0';
-                    else
-                        *name8 = '\0';
-
-                    lfninfo.start = FATFS_MAXNAMLEN_UTF8 - 1;
-                    name_ptr = fs_name->shrt_name;      // put 8.3 into shrt_name
-                }
-                /* We don't have a LFN, so put the short name in 
-                 * fs_name->name */
-                else {
                     fs_name->shrt_name[0] = '\0';
                     name_ptr = fs_name->name;   // put 8.3 into normal location
-                }
-
 
                 /* copy in the short name into the place specified above. 
                  * Skip spaces and put in the . */
                 a = 0;
-                for (b = 0; b < 8; b++) {
+                for (b = 0; b < 42; b++) {
+                    if(dir->name[b] < 33 || dir->name[b] > 126) break;
                     if ((dir->name[b] != 0) && (dir->name[b] != 0xff) &&
                         (dir->name[b] != 0x20)) {
 
@@ -343,27 +296,9 @@ fatfs_dent_parse_buf(FATFS_INFO * fatfs, TSK_FS_DIR * a_fs_dir, char *buf,
                             && (dir->name[0] == FATFS_SLOT_DELETED)) {
                             name_ptr[a++] = '_';
                         }
-                        else if ((dir->lowercase & FATFS_CASE_LOWER_BASE)
-                            && (dir->name[b] >= 'A')
-                            && (dir->name[b] <= 'Z')) {
-                            name_ptr[a++] = dir->name[b] + 32;
-                        }
                         else {
                             name_ptr[a++] = dir->name[b];
                         }
-                    }
-                }
-
-                for (b = 0; b < 3; b++) {
-                    if ((dir->ext[b] != 0) && (dir->ext[b] != 0xff) &&
-                        (dir->ext[b] != 0x20)) {
-                        if (b == 0)
-                            name_ptr[a++] = '.';
-                        if ((dir->lowercase & FATFS_CASE_LOWER_EXT) &&
-                            (dir->ext[b] >= 'A') && (dir->ext[b] <= 'Z'))
-                            name_ptr[a++] = dir->ext[b] + 32;
-                        else
-                            name_ptr[a++] = dir->ext[b];
                     }
                 }
                 name_ptr[a] = '\0';

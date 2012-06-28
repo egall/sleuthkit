@@ -113,10 +113,9 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
         else {
             tsk_error_reset();
         }
-
-        if ((fs_info =
-                fatfs_open(a_img_info, a_offset, TSK_FS_TYPE_FAT_DETECT,
-                    1)) != NULL) {
+         
+        if((fs_info = fatfs_open(a_img_info, a_offset,
+                           TSK_FS_TYPE_FAT_DETECT, 1)) != NULL){
             if (set == NULL) {
                 set = "FAT";
                 fs_set = fs_info;

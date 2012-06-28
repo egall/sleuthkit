@@ -52,6 +52,13 @@ tsk_vs_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset,
         else {
             tsk_error_reset();
         }
+        if ((vs = tsk_vs_xtaf_open(img_info, offset, 0)) != NULL) {
+            set = "XTAF";
+            vs_set = vs;
+        }
+        else {
+            tsk_error_reset();
+        }
         if ((vs = tsk_vs_bsd_open(img_info, offset)) != NULL) {
             // if (set == NULL) {
             // In this case, BSD takes priority because BSD partitions start off with
@@ -172,10 +179,11 @@ tsk_vs_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset,
         return vs_set;
     }
     else {
-
         switch (type) {
         case TSK_VS_TYPE_DOS:
             return tsk_vs_dos_open(img_info, offset, 0);
+        case TSK_VS_TYPE_XTAF:
+            return tsk_vs_xtaf_open(img_info, offset, 0);
         case TSK_VS_TYPE_MAC:
             return tsk_vs_mac_open(img_info, offset);
         case TSK_VS_TYPE_BSD:

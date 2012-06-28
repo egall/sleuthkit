@@ -57,12 +57,13 @@ extern "C" {
 #endif
 
 
+// NBBY == Number of bits in a byte
 #ifndef NBBY
 #define NBBY 8
 #endif
 
 #ifndef isset
-#define isset(a,i)	(((uint8_t *)(a))[(i)/NBBY] &  (1<<((i)%NBBY)))
+#define isset(a,i)	(  ((uint8_t *)(a))    [(i)/NBBY]        &  (1<<((i)%NBBY)))
 #endif
 
 #ifndef setbit

@@ -81,7 +81,6 @@ extern "C" {
 #define FATFS_ISBAD(val, mask) \
 	((val) == (FATFS_BAD & mask))
 
-
 #define FATFS_CLUST_2_SECT(fatfs, c)	\
 	(TSK_DADDR_T)(fatfs->firstclustsect + ((((c) & fatfs->mask) - 2) * fatfs->csize))
 
@@ -100,7 +99,7 @@ extern "C" {
     (size_t)(((i - FATFS_FIRST_NORMINO) % fatfs->dentry_cnt_se) * sizeof(fatfs_dentry))
 
 
-
+/* Refrence Carrier FSF 231-232 Desc of sect to "inode addr" */
 /* given a sector IN THE DATA AREA, return the base inode for it */
 #define FATFS_SECT_2_INODE(fatfs, s)    \
     (TSK_INUM_T)((s - fatfs->firstdatasect) * fatfs->dentry_cnt_se + FATFS_FIRST_NORMINO)
@@ -108,52 +107,18 @@ extern "C" {
 
 
 /*
- * Boot Sector Structure for TSK_FS_INFO_TYPE_FAT_12, TSK_FS_INFO_TYPE_FAT_16, and TSK_FS_INFO_TYPE_FAT_32
+ * Boot Sector Structure for TSK_FS_INFO_TYPE_XTAF
+ * (512 bytes)
  */
     typedef struct {
-        uint8_t f1[3];
-        char oemname[8];
-        uint8_t ssize[2];       /* sector size in bytes */
-        uint8_t csize;          /* cluster size in sectors */
-        uint8_t reserved[2];    /* number of reserved sectors for boot sectors */
-        uint8_t numfat;         /* Number of FATs */
-        uint8_t numroot[2];     /* Number of Root dentries */
-        uint8_t sectors16[2];   /* number of sectors in FS */
-        uint8_t f2[1];
-        uint8_t sectperfat16[2];        /* size of FAT */
-        uint8_t f3[4];
-        uint8_t prevsect[4];    /* number of sectors before FS partition */
-        uint8_t sectors32[4];   /* 32-bit value of number of FS sectors */
-
-        /* The following are different for fat12/fat16 and fat32 */
-        union {
-            struct {
-                uint8_t f5[3];
-                uint8_t vol_id[4];
-                uint8_t vol_lab[11];
-                uint8_t fs_type[8];
-                uint8_t f6[448];
-            } f16;
-            struct {
-                uint8_t sectperfat32[4];
-                uint8_t ext_flag[2];
-                uint8_t fs_ver[2];
-                uint8_t rootclust[4];   /* cluster where root directory is stored */
-                uint8_t fsinfo[2];      /* TSK_FS_INFO Location */
-                uint8_t bs_backup[2];   /* sector of backup of boot sector */
-                uint8_t f5[12];
-                uint8_t drvnum;
-                uint8_t f6[2];
-                uint8_t vol_id[4];
-                uint8_t vol_lab[11];
-                uint8_t fs_type[8];
-                uint8_t f7[420];
-            } f32;
-        } a;
-
-        uint8_t magic[2];       /* MAGIC for all versions */
-
+        uint8_t magic[4]; /* "XTAF" in ASCII */
+        uint8_t serial_number[4];
+        uint8_t csize[4];
+        uint8_t numfat[4];
+        uint8_t f5[2]; /* NULL expected */
+        uint8_t f6[0xFEE];
     } fatfs_sb;
+        
 
     typedef struct {
         uint8_t magic1[4];      /* 41615252 */
@@ -182,14 +147,30 @@ extern "C" {
         uint8_t wdate[2];
         uint8_t startclust[2];
         uint8_t size[4];
+    } old_fatfs_dentry;
+
+    typedef struct {
+        uint8_t fnl;
+        uint8_t attrib;
+        char name[42];
+        uint8_t startclust[4];
+        uint8_t size[4];
+        uint8_t ctime[2];
+        uint8_t cdate[2];
+        uint8_t atime[2];
+        uint8_t adate[2];
+        uint8_t wtime[2];
+	uint8_t wdate[2];
+//        uint8_t highclust[2];
     } fatfs_dentry;
+
 
 
 /* Macro to combine the upper and lower 2-byte parts of the starting
  * cluster 
  */
 #define FATFS_DENTRY_CLUST(fsi, de)	\
-	(TSK_DADDR_T)((tsk_getu16(fsi->endian, de->startclust)) | (tsk_getu16(fsi->endian, de->highclust)<<16))
+	(TSK_DADDR_T)((tsk_getu32(fsi->endian, de->startclust))-0)
 
 /* constants for first byte of name[] */
 #define FATFS_SLOT_EMPTY	0x00
@@ -235,11 +216,11 @@ extern "C" {
 #define FATFS_CASE_LOWER_EXT	0x10    /* extension is lower case */
 #define FATFS_CASE_LOWER_ALL	0x18    /* both are lower */
 
-#define FATFS_SEC_MASK		0x1f    /* number of seconds div by 2 */
-#define FATFS_SEC_SHIFT		0
+#define FATFS_SEC_MASK		0x001f    /* number of seconds div by 2 */
+#define FATFS_SEC_SHIFT		1
 #define FATFS_SEC_MIN		0
 #define FATFS_SEC_MAX		30
-#define FATFS_MIN_MASK		0x7e0   /* number of minutes 0-59 */
+#define FATFS_MIN_MASK		0x003f   /* number of minutes 0-59 */
 #define FATFS_MIN_SHIFT		5
 #define FATFS_MIN_MIN		0
 #define FATFS_MIN_MAX		59
@@ -249,16 +230,21 @@ extern "C" {
 #define FATFS_HOUR_MAX		23
 
 /* return 1 if x is a valid FAT time */
-#define FATFS_ISTIME(x)	\
-	(((((x & FATFS_SEC_MASK) >> FATFS_SEC_SHIFT) > FATFS_SEC_MAX) || \
-	  (((x & FATFS_MIN_MASK) >> FATFS_MIN_SHIFT) > FATFS_MIN_MAX) || \
-	  (((x & FATFS_HOUR_MASK) >> FATFS_HOUR_SHIFT) > FATFS_HOUR_MAX) ) == 0)
 
-#define FATFS_DAY_MASK		0x1f    /* day of month 1-31 */
+#define FATFS_ISTIME(x)        \
+        (((((x & FATFS_SEC_MASK) << FATFS_SEC_SHIFT) < FATFS_SEC_MIN) || \
+          (((x & FATFS_SEC_MASK) << FATFS_SEC_SHIFT) > FATFS_SEC_MAX) || \
+          ((x >> FATFS_MIN_SHIFT & FATFS_MIN_MASK) < FATFS_MIN_MIN) || \
+          ((x >> FATFS_MIN_SHIFT & FATFS_MIN_MASK) > FATFS_MIN_MAX) || \
+          ((x >> FATFS_HOUR_SHIFT) > FATFS_MIN_MAX) || \
+          ((x  >> FATFS_HOUR_SHIFT) > FATFS_HOUR_MAX) ) == 0)
+
+
+#define FATFS_DAY_MASK		0x001f    /* day of month 1-31 */
 #define FATFS_DAY_SHIFT		0
 #define FATFS_DAY_MIN		1
 #define FATFS_DAY_MAX		31
-#define FATFS_MON_MASK		0x1e0   /* month 1-12 */
+#define FATFS_MON_MASK		0x00f   /* month 1-12 */
 #define FATFS_MON_SHIFT		5
 #define FATFS_MON_MIN		1
 #define FATFS_MON_MAX		12
@@ -266,14 +252,17 @@ extern "C" {
 #define FATFS_YEAR_SHIFT	9
 #define FATFS_YEAR_MIN		0
 #define FATFS_YEAR_MAX		127
+#define FATFS_YEAR_OFFSET       32 
 
 /* return 1 if x is a valid FAT date */
-#define FATFS_ISDATE(x)	\
-	 (((((x & FATFS_DAY_MASK) >> FATFS_DAY_SHIFT) > FATFS_DAY_MAX) || \
-	   (((x & FATFS_DAY_MASK) >> FATFS_DAY_SHIFT) < FATFS_DAY_MIN) || \
-	   (((x & FATFS_MON_MASK) >> FATFS_MON_SHIFT) > FATFS_MON_MAX) || \
-	   (((x & FATFS_MON_MASK) >> FATFS_MON_SHIFT) < FATFS_MON_MIN) || \
-	   (((x & FATFS_YEAR_MASK) >> FATFS_YEAR_SHIFT) > FATFS_YEAR_MAX) ) == 0)
+#define FATFS_ISDATE(x)        \
+         ((((x & FATFS_DAY_MASK) > FATFS_DAY_MAX) || \
+           ((x & FATFS_DAY_MASK) < FATFS_DAY_MIN) || \
+           ((x >> FATFS_MON_SHIFT & FATFS_MON_MASK) > FATFS_MON_MAX) || \
+           ((x >> FATFS_MON_SHIFT & FATFS_MON_MASK) < FATFS_MON_MIN) || \
+           (((x >> FATFS_YEAR_SHIFT) & FATFS_YEAR_MASK) > FATFS_YEAR_MAX) ) == 0)
+
+
 
 /* 
  * Long file name support for windows 
@@ -339,7 +328,7 @@ extern "C" {
 
         uint16_t ssize;         /* size of sectors in bytes */
         uint16_t ssize_sh;      /* power of 2 for size of sectors */
-        uint8_t csize;          /* size of clusters in sectors */
+        uint8_t csize;          /* size of clusters in sectors */ /*NOTE: XTAF uses 32 bits for this value, so we may lose bits here. TODO: Check while parsing.*/
         //uint16_t      reserved;       /* number of reserved sectors */
         uint8_t numfat;         /* number of fat tables */
         uint32_t sectperfat;    /* sectors per fat table */

@@ -98,19 +98,19 @@ is_83_name(fatfs_dentry * de)
             fprintf(stderr, "fatfs_is_83_name: name[7] is invalid\n");
         return 0;
     }
-    else if (FATFS_IS_83_NAME(de->ext[0]) == 0) {
+    else if (FATFS_IS_83_NAME(de->name[8]) == 0) {
         if (tsk_verbose)
-            fprintf(stderr, "fatfs_is_83_name: ext[0] is invalid\n");
+            fprintf(stderr, "fatfs_is_83_name: name[8] is invalid\n");
         return 0;
     }
-    else if (FATFS_IS_83_NAME(de->ext[1]) == 0) {
+    else if (FATFS_IS_83_NAME(de->name[9]) == 0) {
         if (tsk_verbose)
-            fprintf(stderr, "fatfs_is_83_name: ext[1] is invalid\n");
+            fprintf(stderr, "fatfs_is_83_name: name[9] is invalid\n");
         return 0;
     }
-    else if (FATFS_IS_83_NAME(de->ext[2]) == 0) {
+    else if (FATFS_IS_83_NAME(de->name[10]) == 0) {
         if (tsk_verbose)
-            fprintf(stderr, "fatfs_is_83_name: ext[2] is invalid\n");
+            fprintf(stderr, "fatfs_is_83_name: name[10] is invalid\n");
         return 0;
     }
 
@@ -126,7 +126,7 @@ is_83_name(fatfs_dentry * de)
             ((de->name[4] == 0x20) && (de->name[5] != 0x20)) ||
             ((de->name[5] == 0x20) && (de->name[6] != 0x20)) ||
             ((de->name[6] == 0x20) && (de->name[7] != 0x20)) ||
-            ((de->ext[1] == 0x20) && (de->ext[2] != 0x20))) {
+            ((de->name[8] == 0x20) && (de->name[9] != 0x20))) {
             if (tsk_verbose)
                 fprintf(stderr,
                     "fatfs_is_83_name: space before non-space\n");
@@ -151,45 +151,51 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
     struct tm tm1;
     time_t ret;
 
+/*
     if (date == 0)
         return 0;
+*/
 
     memset(&tm1, 0, sizeof(struct tm));
 
-    tm1.tm_sec = ((time & FATFS_SEC_MASK) >> FATFS_SEC_SHIFT) * 2;
-    if ((tm1.tm_sec < 0) || (tm1.tm_sec > 60))
+    tm1.tm_sec = (time & FATFS_SEC_MASK) << FATFS_SEC_SHIFT;
+    if ((tm1.tm_sec < 0) || (tm1.tm_sec > 59))
         tm1.tm_sec = 0;
-    // the ctimetens value has a range of 0 to 199
-    if (timetens > 100)
-        tm1.tm_sec++;
 
-    tm1.tm_min = ((time & FATFS_MIN_MASK) >> FATFS_MIN_SHIFT);
+    // the ctimetens value has a range of 0 to 199
+//    if (timetens > 100)
+//        tm1.tm_sec++;
+
+    tm1.tm_min = time >> FATFS_MIN_SHIFT & FATFS_MIN_MASK;
     if ((tm1.tm_min < 0) || (tm1.tm_min > 59))
         tm1.tm_min = 0;
 
-    tm1.tm_hour = ((time & FATFS_HOUR_MASK) >> FATFS_HOUR_SHIFT);
+    tm1.tm_hour = time >> FATFS_HOUR_SHIFT;
     if ((tm1.tm_hour < 0) || (tm1.tm_hour > 23))
         tm1.tm_hour = 0;
 
-    tm1.tm_mday = ((date & FATFS_DAY_MASK) >> FATFS_DAY_SHIFT);
+    tm1.tm_mday = date & FATFS_DAY_MASK;
     if ((tm1.tm_mday < 1) || (tm1.tm_mday > 31))
         tm1.tm_mday = 0;
 
-    tm1.tm_mon = ((date & FATFS_MON_MASK) >> FATFS_MON_SHIFT) - 1;
+    tm1.tm_mon = date >> FATFS_MON_SHIFT & FATFS_MON_MASK;
     if ((tm1.tm_mon < 0) || (tm1.tm_mon > 11))
         tm1.tm_mon = 0;
+    
+
 
     /* There is a limit to the year because the UNIX time value is
      * a 32-bit value 
      * the maximum UNIX time is Tue Jan 19 03:14:07 2038
      */
-    tm1.tm_year = ((date & FATFS_YEAR_MASK) >> FATFS_YEAR_SHIFT) + 80;
+    tm1.tm_year = (date >> FATFS_YEAR_SHIFT) + FATFS_YEAR_OFFSET;
     if ((tm1.tm_year < 0) || (tm1.tm_year > 137))
         tm1.tm_year = 0;
 
     /* set the daylight savings variable to -1 so that mktime() figures
      * it out */
     tm1.tm_isdst = -1;
+
 
     ret = mktime(&tm1);
 
@@ -224,10 +230,12 @@ dos2nanosec(uint8_t timetens)
 static TSK_FS_META_TYPE_ENUM
 attr2type(uint16_t attr)
 {
-    if (attr & FATFS_ATTR_DIRECTORY)
+    if (attr & FATFS_ATTR_DIRECTORY){
         return TSK_FS_META_TYPE_DIR;
-    else
+    }
+    else{
         return TSK_FS_META_TYPE_REG;
+    }
 }
 
 
@@ -316,18 +324,6 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
     fs_meta->flags |= ((in->name[0] == FATFS_SLOT_EMPTY) ?
         TSK_FS_META_FLAG_UNUSED : TSK_FS_META_FLAG_USED);
 
-    if ((in->attrib & FATFS_ATTR_LFN) == FATFS_ATTR_LFN) {
-        /* LFN entries don't have these values */
-        fs_meta->nlink = 0;
-        fs_meta->size = 0;
-        fs_meta->mtime = 0;
-        fs_meta->atime = 0;
-        fs_meta->ctime = 0;
-        fs_meta->crtime = 0;
-        fs_meta->mtime_nano = fs_meta->atime_nano = fs_meta->ctime_nano =
-            fs_meta->crtime_nano = 0;
-    }
-    else {
         /* There is no notion of link in FAT, just deleted or not */
         fs_meta->nlink = (in->name[0] == FATFS_SLOT_DELETED) ? 0 : 1;
         fs_meta->size = (TSK_OFF_T) tsk_getu32(fs->endian, in->size);
@@ -356,8 +352,8 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
         if (FATFS_ISDATE(tsk_getu16(fs->endian, in->cdate))) {
             fs_meta->crtime =
                 dos2unixtime(tsk_getu16(fs->endian, in->cdate),
-                tsk_getu16(fs->endian, in->ctime), in->ctimeten);
-            fs_meta->crtime_nano = dos2nanosec(in->ctimeten);
+                tsk_getu16(fs->endian, in->ctime), 0);
+            fs_meta->crtime_nano = dos2nanosec(0);
         }
         else {
             fs_meta->crtime = 0;
@@ -367,12 +363,13 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
         // FAT does not have a changed time
         fs_meta->ctime = 0;
         fs_meta->ctime_nano = 0;
-    }
+//    }
 
     /* Values that do not exist in FAT */
     fs_meta->uid = 0;
     fs_meta->gid = 0;
     fs_meta->seq = 0;
+
 
 
     /* We will be copying a name, so allocate a structure */
@@ -382,95 +379,14 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
             return TSK_ERR;
         fs_meta->name2->next = NULL;
     }
-
-    /* If we have a LFN entry, then we need to convert the three
-     * parts of the name to UTF-8 and copy it into the name structure .
-     */
-    if ((in->attrib & FATFS_ATTR_LFN) == FATFS_ATTR_LFN) {
-        fatfs_dentry_lfn *lfn = (fatfs_dentry_lfn *) in;
-
-        /* Convert the first part of the name */
-        UTF8 *name8 = (UTF8 *) fs_meta->name2->name;
-        UTF16 *name16 = (UTF16 *) lfn->part1;
-
-        int retVal = tsk_UTF16toUTF8(fs->endian, (const UTF16 **) &name16,
-            (UTF16 *) & lfn->part1[10],
-            &name8,
-            (UTF8 *) ((uintptr_t) fs_meta->name2->name +
-                sizeof(fs_meta->name2->name)),
-            TSKlenientConversion);
-
-        if (retVal != TSKconversionOK) {
-            tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_UNICODE;
-            snprintf(tsk_errstr, TSK_ERRSTR_L,
-                "fatfs_dinode_copy: Error converting FAT LFN (1) to UTF8: %d",
-                retVal);
-            *name8 = '\0';
-
-            return TSK_COR;
-        }
-
-        /* Convert the second part of the name */
-        name16 = (UTF16 *) lfn->part2;
-        retVal = tsk_UTF16toUTF8(fs->endian, (const UTF16 **) &name16,
-            (UTF16 *) & lfn->part2[12],
-            &name8,
-            (UTF8 *) ((uintptr_t) fs_meta->name2->name +
-                sizeof(fs_meta->name2->name)), TSKlenientConversion);
-
-        if (retVal != TSKconversionOK) {
-            tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_UNICODE;
-            snprintf(tsk_errstr, TSK_ERRSTR_L,
-                "fatfs_dinode_copy: Error converting FAT LFN (2) to UTF8: %d",
-                retVal);
-            *name8 = '\0';
-
-            return TSK_COR;
-        }
-
-        /* Convert the third part of the name */
-        name16 = (UTF16 *) lfn->part3;
-        retVal = tsk_UTF16toUTF8(fs->endian, (const UTF16 **) &name16,
-            (UTF16 *) & lfn->part3[4],
-            &name8,
-            (UTF8 *) ((uintptr_t) fs_meta->name2->name +
-                sizeof(fs_meta->name2->name)), TSKlenientConversion);
-
-        if (retVal != TSKconversionOK) {
-            tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_UNICODE;
-            snprintf(tsk_errstr, TSK_ERRSTR_L,
-                "fatfs_dinode_copy: Error converting FAT LFN (3) to UTF8: %d",
-                retVal);
-            *name8 = '\0';
-
-            return TSK_COR;
-        }
-
-        /* Make sure it is NULL Terminated */
-        if ((uintptr_t) name8 >
-            (uintptr_t) fs_meta->name2->name +
-            sizeof(fs_meta->name2->name))
-            fs_meta->name2->name[sizeof(fs_meta->name2->name) - 1] = '\0';
-        else
-            *name8 = '\0';
-    }
-    /* If the entry is for a volume label, then copy the name and
-     * append a special label 
-     */
-    else if ((in->attrib & FATFS_ATTR_VOLUME) == FATFS_ATTR_VOLUME) {
+    if ((in->attrib & FATFS_ATTR_VOLUME) == FATFS_ATTR_VOLUME) {
         int a;
 
         i = 0;
-        for (a = 0; a < 8; a++) {
+        for (a = 0; a < 42; a++) {
+            if(in->name[i] < 33 || in->name[i] > 126) break;
             if ((in->name[a] != 0x00) && (in->name[a] != 0xff))
                 fs_meta->name2->name[i++] = in->name[a];
-        }
-        for (a = 0; a < 3; a++) {
-            if ((in->ext[a] != 0x00) && (in->ext[a] != 0xff))
-                fs_meta->name2->name[i++] = in->ext[a];
         }
         fs_meta->name2->name[i] = '\0';
 
@@ -488,32 +404,15 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
      * and add the '.' for the extension
      */
     else {
-        for (i = 0; (i < 8) && (in->name[i] != 0) && (in->name[i] != ' ');
+        for (i = 0; (i < 42) && (in->name[i] != 0) && (in->name[i] != ' ');
             i++) {
+            if(in->name[i] < 33 || in->name[i] > 126) break;
             if ((i == 0) && (in->name[0] == FATFS_SLOT_DELETED))
                 fs_meta->name2->name[0] = '_';
-            else if ((in->lowercase & FATFS_CASE_LOWER_BASE) &&
-                (in->name[i] >= 'A') && (in->name[i] <= 'Z'))
-                fs_meta->name2->name[i] = in->name[i] + 32;
             else
                 fs_meta->name2->name[i] = in->name[i];
         }
-
-        if ((in->ext[0]) && (in->ext[0] != ' ')) {
-            int a;
-            fs_meta->name2->name[i++] = '.';
-            for (a = 0;
-                (a < 3) && (in->ext[a] != 0) && (in->ext[a] != ' ');
-                a++, i++) {
-                if ((in->lowercase & FATFS_CASE_LOWER_EXT)
-                    && (in->ext[a] >= 'A') && (in->ext[a] <= 'Z'))
-                    fs_meta->name2->name[i] = in->ext[a] + 32;
-                else
-                    fs_meta->name2->name[i] = in->ext[a];
-            }
-        }
         fs_meta->name2->name[i] = '\0';
-
         /* clean up non-ASCII because we are
          * copying it into a buffer that is supposed to be UTF-8 and
          * we don't know what encoding it is actually in or if it is 
@@ -535,12 +434,9 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
 
     /* get the starting cluster */
     addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
-    if ((in->attrib & FATFS_ATTR_LFN) == FATFS_ATTR_LFN) {
-        addr_ptr[0] = 0;
-    }
-    else {
-        addr_ptr[0] = FATFS_DENTRY_CLUST(fs, in) & fatfs->mask;
-    }
+
+    /* set addr_ptr to start clust of dentry "in" */
+    addr_ptr[0] = FATFS_DENTRY_CLUST(fs, in) & fatfs->mask;
 
     /* FAT does not store a size for its directories so make one based
      * on the number of allocated sectors 
@@ -603,6 +499,7 @@ fatfs_dinode_copy(FATFS_INFO * fatfs, TSK_FS_META * fs_meta,
 
     return TSK_OK;
 }
+
 
 /**
  * \internal
@@ -668,13 +565,14 @@ fatfs_make_root(FATFS_INFO * fatfs, TSK_FS_META * fs_meta)
 
         /* base cluster */
         clust = FATFS_SECT_2_CLUST(fatfs, fatfs->rootsect);
-        addr_ptr[0] = clust;
+        addr_ptr[0] = 1;
 
         cnum = 0;
         while ((clust) && (0 == FATFS_ISEOF(clust, FATFS_32_MASK))) {
             TSK_DADDR_T nxt;
 
             /* Make sure we do not get into an infinite loop */
+            
             if (tsk_list_find(list_seen, clust)) {
                 if (tsk_verbose)
                     tsk_fprintf(stderr,
@@ -701,112 +599,6 @@ fatfs_make_root(FATFS_INFO * fatfs, TSK_FS_META * fs_meta)
 }
 
 
-/**
-* \internal
- * Create an FS_INODE structure for the master boot record. 
- *
- * @param fatfs File system to analyze
- * @param fs_meta Inode structure to copy file information into.
- * @return 1 on error and 0 on success
- */
-uint8_t
-fatfs_make_mbr(FATFS_INFO * fatfs, TSK_FS_META * fs_meta)
-{
-    TSK_DADDR_T *addr_ptr;
-    TSK_FS_INFO *fs = (TSK_FS_INFO *) fatfs;
-
-    fs_meta->type = TSK_FS_META_TYPE_VIRT;
-    fs_meta->mode = 0;
-    fs_meta->nlink = 1;
-    fs_meta->addr = FATFS_MBRINO(fs);
-    fs_meta->flags = (TSK_FS_META_FLAG_USED | TSK_FS_META_FLAG_ALLOC);
-    fs_meta->uid = fs_meta->gid = 0;
-    fs_meta->mtime = fs_meta->atime = fs_meta->ctime = fs_meta->crtime = 0;
-    fs_meta->mtime_nano = fs_meta->atime_nano = fs_meta->ctime_nano =
-        fs_meta->crtime_nano = 0;
-
-    if (fs_meta->name2 == NULL) {
-        if ((fs_meta->name2 = (TSK_FS_META_NAME_LIST *)
-                tsk_malloc(sizeof(TSK_FS_META_NAME_LIST))) == NULL)
-            return 1;
-        fs_meta->name2->next = NULL;
-    }
-    strncpy(fs_meta->name2->name, FATFS_MBRNAME,
-        TSK_FS_META_NAME_LIST_NSIZE);
-
-    fs_meta->attr_state = TSK_FS_META_ATTR_EMPTY;
-    if (fs_meta->attr) {
-        tsk_fs_attrlist_markunused(fs_meta->attr);
-    }
-
-    addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
-    addr_ptr[0] = 0;
-    fs_meta->size = 512;
-
-    return 0;
-}
-
-/**
-* \internal
- * Create an FS_INODE structure for the FAT tables. 
- *
- * @param fatfs File system to analyze
- * @param a_which 1 or 2 to choose between defining FAT1 or FAT2
- * @param fs_meta Inode structure to copy file information into.
- * @return 1 on error and 0 on success
- */
-uint8_t
-fatfs_make_fat(FATFS_INFO * fatfs, uint8_t a_which, TSK_FS_META * fs_meta)
-{
-    TSK_FS_INFO *fs = (TSK_FS_INFO *) fatfs;
-    TSK_DADDR_T *addr_ptr;
-
-    fs_meta->type = TSK_FS_META_TYPE_VIRT;
-    fs_meta->mode = 0;
-    fs_meta->nlink = 1;
-
-    fs_meta->flags = (TSK_FS_META_FLAG_USED | TSK_FS_META_FLAG_ALLOC);
-    fs_meta->uid = fs_meta->gid = 0;
-    fs_meta->mtime = fs_meta->atime = fs_meta->ctime = fs_meta->crtime = 0;
-    fs_meta->mtime_nano = fs_meta->atime_nano = fs_meta->ctime_nano =
-        fs_meta->crtime_nano = 0;
-
-    if (fs_meta->name2 == NULL) {
-        if ((fs_meta->name2 = (TSK_FS_META_NAME_LIST *)
-                tsk_malloc(sizeof(TSK_FS_META_NAME_LIST))) == NULL)
-            return 1;
-        fs_meta->name2->next = NULL;
-    }
-
-    if (a_which == 1) {
-        fs_meta->addr = FATFS_FAT1INO(fs);
-        strncpy(fs_meta->name2->name, FATFS_FAT1NAME,
-            TSK_FS_META_NAME_LIST_NSIZE);
-        addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
-        addr_ptr[0] = fatfs->firstfatsect;
-    }
-    else if (a_which == 2) {
-        fs_meta->addr = FATFS_FAT2INO(fs);
-        strncpy(fs_meta->name2->name, FATFS_FAT2NAME,
-            TSK_FS_META_NAME_LIST_NSIZE);
-        addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
-        addr_ptr[0] = fatfs->firstfatsect + fatfs->sectperfat;
-    }
-    else {
-        ////@@@ 
-    }
-
-    fs_meta->attr_state = TSK_FS_META_ATTR_EMPTY;
-    if (fs_meta->attr) {
-        tsk_fs_attrlist_markunused(fs_meta->attr);
-    }
-
-    fs_meta->size = fatfs->sectperfat * fs->block_size;
-
-    return 0;
-}
-
-
 
 /* 
  * Is the pointed to buffer a directory entry buffer? 
@@ -818,32 +610,22 @@ uint8_t
 fatfs_isdentry(FATFS_INFO * fatfs, fatfs_dentry * de, uint8_t a_basic)
 {
     TSK_FS_INFO *fs = (TSK_FS_INFO *) & fatfs->fs_info;
-    if (!de)
+    if (!de){
         return 0;
-
-    /* LFN have their own checks, which are pretty weak since most
-     * fields are UTF16 */
-    if ((de->attrib & FATFS_ATTR_LFN) == FATFS_ATTR_LFN) {
-        fatfs_dentry_lfn *de_lfn = (fatfs_dentry_lfn *) de;
-
-        if ((de_lfn->seq > (FATFS_LFN_SEQ_FIRST | 0x0f))
-            && (de_lfn->seq != FATFS_SLOT_DELETED)) {
-            if (tsk_verbose)
-                fprintf(stderr, "fatfs_isdentry: LFN seq\n");
-            return 0;
-        }
-
-        return 1;
     }
-    else {
+    int i;
+    uint8_t *end_dent;
+        end_dent = de;
+        for(i = 0; i < 64; i++, end_dent++){
+            if(end_dent == 0xff || end_dent == 0x00) continue;
+            break;
+            
+        }
+        if(i >= 63){printf("de->name = %s\n", de->name);return 0;
+                   }
         // the basic test is only for the 'essential data'.
         if (a_basic == 0) {
-            if (de->lowercase & ~(FATFS_CASE_LOWER_ALL)) {
-                if (tsk_verbose)
-                    fprintf(stderr, "fatfs_isdentry: lower case all\n");
-                return 0;
-            }
-            else if (de->attrib & ~(FATFS_ATTR_ALL)) {
+            if (de->attrib & ~(FATFS_ATTR_ALL)) {
                 if (tsk_verbose)
                     fprintf(stderr, "fatfs_isdentry: attribute all\n");
                 return 0;
@@ -892,11 +674,6 @@ fatfs_isdentry(FATFS_INFO * fatfs, fatfs_dentry * de, uint8_t a_basic)
                     fprintf(stderr, "fatfs_isdentry: cdate\n");
                 return 0;
             }
-            else if (de->ctimeten > 200) {
-                if (tsk_verbose)
-                    fprintf(stderr, "fatfs_isdentry: ctimeten\n");
-                return 0;
-            }
             else if ((tsk_getu16(fs->endian, de->adate) != 0) &&
                 (FATFS_ISDATE(tsk_getu16(fs->endian, de->adate)) == 0)) {
                 if (tsk_verbose)
@@ -912,6 +689,7 @@ fatfs_isdentry(FATFS_INFO * fatfs, fatfs_dentry * de, uint8_t a_basic)
         }
 
         /* verify the starting cluster is small enough */
+
         if ((FATFS_DENTRY_CLUST(fs, de) > (fatfs->lastclust)) &&
             (FATFS_ISEOF(FATFS_DENTRY_CLUST(fs, de), fatfs->mask) == 0)) {
             if (tsk_verbose)
@@ -919,24 +697,29 @@ fatfs_isdentry(FATFS_INFO * fatfs, fatfs_dentry * de, uint8_t a_basic)
             return 0;
         }
 
+
         /* Verify the file size is smaller than the data area */
         else if (tsk_getu32(fs->endian, de->size) >
             ((fatfs->clustcnt * fatfs->csize) << fatfs->ssize_sh)) {
             if (tsk_verbose)
                 fprintf(stderr, "fatfs_isdentry: size\n");
             return 0;
-        }
+        } 
 
-        else if ((tsk_getu32(fs->endian, de->size) > 0)
-            && (FATFS_DENTRY_CLUST(fs, de) == 0)) {
+/*EQS NOTE: This makes no sense, if the de->size is > 0 it means it is a de
+            I changed it to be the opposite */
+        else if ((tsk_getu32(fs->endian, de->size) < 0)){
             if (tsk_verbose)
                 fprintf(stderr,
                     "fatfs_isdentry: non-zero size and NULL starting cluster\n");
             return 0;
         }
 
-        else if (is_83_name(de) == 0)
+/*
+        else if (is_83_name(de) == 0){
             return 0;
+        }
+*/
 
         // basic sanity check on values
         else if ((tsk_getu16(fs->endian, de->ctime) == 0)
@@ -952,11 +735,9 @@ fatfs_isdentry(FATFS_INFO * fatfs, fatfs_dentry * de, uint8_t a_basic)
             return 0;
         }
 
+
         return 1;
-    }
 }
-
-
 
 /**************************************************************************
  *
@@ -1172,6 +953,8 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         }
     }
 
+    /*AJN: At this point, sect_alloc has a bit set for all of the used sectors of the partition, with the very first possible bit set being 80 (it may be later if the walk started at a non-root sector) .*/
+
 
     /* start analyzing each sector
      *
@@ -1189,6 +972,7 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         end_inum_tmp = fs->last_inum - FATFS_NUM_SPECFILE;
     else
         end_inum_tmp = end_inum;
+
 
     ssect = FATFS_INODE_2_SECT(fatfs, start_inum);
     lsect = FATFS_INODE_2_SECT(fatfs, end_inum_tmp);
@@ -1226,6 +1010,7 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         size_t sect_proc;       // number of sectors read for this loop
         size_t sidx;            // sector index for loop
 
+
         /* This occurs for the root directory of TSK_FS_TYPE_FAT12/16 
          * 
          * We are going to process the image in clusters, so take care of the root
@@ -1262,7 +1047,6 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
         /* For the data area, we will read in cluster-sized chunks */
         else {
-
             /* get the base sector for the cluster in which the first inode exists */
             sect =
                 FATFS_CLUST_2_SECT(fatfs, (FATFS_SECT_2_CLUST(fatfs,
@@ -1329,6 +1113,7 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             /* if we know it is not part of a directory and it is not valid dentires,
              * then skip it */
             isInDir = isset(sect_alloc, sect);
+              
             if ((isInDir == 0) &&
                 (fatfs_isdentry(fatfs, dep, 0) == 0)) {
                 sect++;
@@ -1356,8 +1141,9 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 TSK_RETVAL_ENUM retval2;
 
                 /* If less, then move on */
-                if (inum < start_inum)
+                if (inum < start_inum){
                     continue;
+                }
 
                 /* If we are done, then exit from the loops  */
                 if (inum > end_inum_tmp) {
@@ -1366,18 +1152,13 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 }
 
 
-                /* if this is a long file name entry, then skip it and 
-                 * wait for the short name */
-                if ((dep->attrib & FATFS_ATTR_LFN) == FATFS_ATTR_LFN)
-                    continue;
-
-
                 /* we don't care about . and .. entries because they
                  * are redundant of other 'inode' entries */
                 if (((dep->attrib & FATFS_ATTR_DIRECTORY)
                         == FATFS_ATTR_DIRECTORY)
-                    && (dep->name[0] == '.'))
+                    && (dep->name[0] == '.')){
                     continue;
+                }
 
 
                 /* Allocation status 
@@ -1398,7 +1179,8 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 if ((a_flags & myflags) != myflags)
                     continue;
 
-                /* Slot has not been used yet */
+                /* Slot has not been used yet
+                */
                 myflags |= ((dep->name[0] == FATFS_SLOT_EMPTY) ?
                     TSK_FS_META_FLAG_UNUSED : TSK_FS_META_FLAG_USED);
 
@@ -1415,8 +1197,9 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 }
 
                 /* Do a final sanity check */
-                if (0 == fatfs_isdentry(fatfs, dep, isInDir))
+                if (0 == fatfs_isdentry(fatfs, dep, isInDir)){
                     continue;
+                }
 
                 if ((retval2 =
                         fatfs_dinode_copy(fatfs, fs_file->meta, dep, sect,
@@ -1484,25 +1267,7 @@ fatfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
             tsk_fs_meta_reset(fs_file->meta);
 
-            if (inum == FATFS_MBRINO(fs)) {
-                if (fatfs_make_mbr(fatfs, fs_file->meta)) {
-                    tsk_fs_file_close(fs_file);
-                    return 1;
-                }
-            }
-            else if (inum == FATFS_FAT1INO(fs)) {
-                if (fatfs_make_fat(fatfs, 1, fs_file->meta)) {
-                    tsk_fs_file_close(fs_file);
-                    return 1;
-                }
-            }
-            else if (inum == FATFS_FAT2INO(fs)) {
-                if (fatfs_make_fat(fatfs, 2, fs_file->meta)) {
-                    tsk_fs_file_close(fs_file);
-                    return 1;
-                }
-            }
-            else if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
+            if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
                 if (tsk_fs_dir_make_orphan_dir_meta(fs, fs_file->meta)) {
                     tsk_fs_file_close(fs_file);
                     return 1;
@@ -1580,27 +1345,6 @@ fatfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
         else
             return 0;
     }
-    else if (inum == FATFS_MBRINO(fs)) {
-        fatfs->dep = NULL;
-        if (fatfs_make_mbr(fatfs, a_fs_file->meta))
-            return 1;
-        else
-            return 0;
-    }
-    else if (inum == FATFS_FAT1INO(fs)) {
-        fatfs->dep = NULL;
-        if (fatfs_make_fat(fatfs, 1, a_fs_file->meta))
-            return 1;
-        else
-            return 0;
-    }
-    else if (inum == FATFS_FAT2INO(fs)) {
-        fatfs->dep = NULL;
-        if (fatfs_make_fat(fatfs, 2, a_fs_file->meta))
-            return 1;
-        else
-            return 0;
-    }
     else if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
         fatfs->dep = NULL;
         if (tsk_fs_dir_make_orphan_dir_meta(fs, a_fs_file->meta))
@@ -1638,7 +1382,6 @@ fatfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
             "fatfs_inode_lookup: block: %" PRIuDADDR, sect);
         return 1;
     }
-
     fatfs->dep = (fatfs_dentry *) & fatfs->dinodes[off];
     if (fatfs_isdentry(fatfs, fatfs->dep, 1)) {
         if ((retval =
@@ -1697,6 +1440,7 @@ fatfs_make_data_run(TSK_FS_FILE * a_fs_file)
     fatfs = (FATFS_INFO *) fs;
 
     clust = ((TSK_DADDR_T *) fs_meta->content_ptr)[0];
+
     size_remain = roundup(fs_meta->size, fatfs->csize * fs->block_size);
 
     // see if we have already loaded the runs
@@ -1836,6 +1580,7 @@ fatfs_make_data_run(TSK_FS_FILE * a_fs_file)
         /* Sanity checks on the starting cluster */
         /* Convert the cluster addr to a sector addr */
         sbase = FATFS_CLUST_2_SECT(fatfs, startclust);
+
 
         if (sbase > fs->last_block) {
             tsk_error_reset();
@@ -1982,6 +1727,8 @@ fatfs_make_data_run(TSK_FS_FILE * a_fs_file)
             tsk_fprintf(stderr,
                 "fatfs_make_data_run: Processing file %" PRIuINUM
                 " in normal mode\n", fs_meta->addr);
+
+        
 
         /* Cycle through the cluster chain */
         while ((clust & fatfs->mask) > 0 && (int64_t) size_remain > 0 &&
