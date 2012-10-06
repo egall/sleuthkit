@@ -749,6 +749,7 @@ extern "C" {
         TSK_FS_TYPE_ISO9660_DETECT = 0x00000800,        ///< ISO9660 auto detection
         TSK_FS_TYPE_HFS = 0x00001000,   ///< HFS file system
         TSK_FS_TYPE_HFS_DETECT = 0x00001000,    ///< HFS auto detection
+        TSK_FS_TYPE_REG = 0x00002000,    ///< Windows Registry
         TSK_FS_TYPE_UNSUPP = 0xffffffff,        ///< Unsupported file system
     };
     typedef enum TSK_FS_TYPE_ENUM TSK_FS_TYPE_ENUM;
