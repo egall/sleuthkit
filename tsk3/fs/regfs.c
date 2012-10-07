@@ -24,7 +24,6 @@
 
 
 
-//fs->inode_walk = reg_inode_walk;
 static uint8_t
 reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     TSK_INUM_T end_inum, TSK_FS_META_FLAG_ENUM flags,
@@ -34,7 +33,6 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     return 0;
 }
 
-//fs->block_walk = reg_block_walk;
 reg_block_walk(TSK_FS_INFO * fs,
     TSK_DADDR_T a_start_blk, TSK_DADDR_T a_end_blk,
     TSK_FS_BLOCK_WALK_FLAG_ENUM a_flags, TSK_FS_BLOCK_WALK_CB a_action,
@@ -45,15 +43,12 @@ reg_block_walk(TSK_FS_INFO * fs,
     return 0;
 }
 
-
-//fs->block_getflags = reg_block_getflags;
 reg_block_getflags(TSK_FS_INFO * fs, TSK_DADDR_T a_addr)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     return 0;
 }
 
-//fs->get_default_attr_type = reg_get_default_attr_type;
 static TSK_FS_ATTR_TYPE_ENUM
 reg_get_default_attr_type(const TSK_FS_FILE * a_file)
 {
@@ -67,7 +62,6 @@ reg_get_default_attr_type(const TSK_FS_FILE * a_file)
         return TSK_FS_ATTR_TYPE_NTFS_DATA;
 }
 
-//fs->load_attrs = reg_load_attrs;
 /** \internal
  * Load the attributes.
  * @param a_fs_file File to load attributes for.
@@ -79,7 +73,6 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     return 0;
 }
 
-//fs->file_add_meta = reg_inode_lookup;
 /**
  * Read an MFT entry and save it in the generic TSK_FS_META format.
  *
@@ -95,7 +88,6 @@ reg_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
     return 0;
 }
 
-//fs->dir_open_meta = reg_dir_open_meta;
 TSK_RETVAL_ENUM
 reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
@@ -104,8 +96,6 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir,
     return 0;
 }
 
-
-//fs->fsstat = reg_fsstat;
 /**
  * Print details about the file system to a file handle.
  *
@@ -118,10 +108,17 @@ static uint8_t
 reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
+
+
+    tsk_fprintf(hFile, "FILE SYSTEM INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "File System Type: Windows Registry\n");
+    tsk_fprintf(hFile, "Major Version: %d\n", reg->regf.major_version);
+    tsk_fprintf(hFile, "Minor Version: %d\n", reg->regf.minor_version);
+
     return 0;
 }
 
-//fs->fscheck = reg_fscheck;
 static uint8_t
 reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
 {
@@ -131,7 +128,6 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
     return 1;
 }
 
-//fs->istat = reg_istat;
 /**
  * Print details on a specific file to a file handle.
  *
@@ -151,9 +147,6 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     return 0;
 }
 
-
-//fs->close = reg_close;
-
 static void
 reg_close(TSK_FS_INFO * fs)
 {
@@ -164,17 +157,12 @@ reg_close(TSK_FS_INFO * fs)
     tsk_fs_free(fs);
 }
 
-
-
-//fs->name_cmp = reg_name_cmp;
 int
 reg_name_cmp(TSK_FS_INFO * a_fs_info, const char *s1, const char *s2)
 {
     return strcasecmp(s1, s2);
 }
 
-
-//fs->fread_owner_sid = reg_file_get_sidstr;
 /** \internal
  * NTFS-specific function (pointed to in FS_INFO) that maps a security ID
  * to an ASCII printable string.
@@ -206,7 +194,6 @@ reg_journal_unsupported() {
     return;
 }
 
-//fs->jblk_walk = reg_jblk_walk;
 /**
  * @brief reg_jblk_walk
  * @param fs
@@ -225,7 +212,6 @@ reg_jblk_walk(TSK_FS_INFO * fs, TSK_DADDR_T start,
     return 1;
 }
 
-//fs->jentry_walk = reg_jentry_walk;
 /**
  * @brief reg_jentry_walk
  * @param fs
@@ -242,9 +228,6 @@ reg_jentry_walk(TSK_FS_INFO * fs, int flags,
     return 1;
 }
 
-
-
-//fs->jopen = reg_jopen;
 /**
  * @brief ntfs_jopen
  * @param fs
@@ -258,7 +241,6 @@ reg_jopen(TSK_FS_INFO * fs, TSK_INUM_T inum)
     return 1;
 }
 
-//fs->journ_inum = 0;
 
 
 
@@ -280,7 +262,38 @@ reg_jopen(TSK_FS_INFO * fs, TSK_INUM_T inum)
 
 
 
+TSK_RETVAL_ENUM
+reg_load_regf(TSK_IMG_INFO *img_info, REGF *regf) {
+    REGF buf;
+    ssize_t count;
 
+    count = tsk_fs_read(img_info, 0, (uint8_t *)buf, 200);
+    if (count != 200) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_READ);
+        return TSK_ERR;
+    }
+
+    if ((tsk_getu32(img_info->endian, regf->magic) != REG_REGF_MAGIC)) {
+        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+        tsk_error_set_errstr("REGF header has an invalid magic header");
+        return TSK_ERR;
+    }
+
+    regf->magic = tsk_getu32(img_info->endian, buf->magic);
+    regf->seq1 = tsk_getu32(img_info->endian, buf->seq1);
+    regf->seq2 = tsk_getu32(img_info->endian, buf->seq2);
+    regf->major_version = tsk_getu32(img_info->endian, buf->major_version);
+    regf->minor_version = tsk_getu32(img_info->endian, buf->minor_version);
+    regf->first_key_offset = tsk_getu32(img_info->endian, buf->first_key_offset);
+    regf->last_hbin_offset = tsk_getu32(img_info->endian, buf->last_hbin_offset);
+
+    // memcpy may be unsafe, but we do check that we got the correct length
+    // right after the tsk_fs_read for buf. So I think its safe.
+    memcpy(regf->hive_name, buf->hive_name, 60);
+
+    return TSK_OK;
+}
 
 
 
@@ -299,6 +312,37 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     TSK_FS_TYPE_ENUM ftype, uint8_t test)
 {
     TSK_FS_INFO *fs;
+    REGFS_INFO *reg;
+
+    tsk_error_reset();
+
+    if (TSK_FS_TYPE_ISREG(ftype) == 0) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("Invalid FS type in reg_open");
+        return NULL;
+    }
+
+    if ((reg = (REGFS_INFO *) tsk_fs_malloc(sizeof(REGFS_INFO))) == NULL) {
+        return NULL;
+    }
+    fs = &(reg->fs_info);
+
+    fs->ftype = TSK_FS_TYPE_REG;
+    fs->duname = "Cell";
+    fs->flags = TSK_FS_INFO_FLAG_NONE;
+    fs->tag = TSK_FS_INFO_TAG;
+    fs->endian = TSK_LIT_ENDIAN;
+
+    fs->img_info = img_info;
+    fs->offset = offset;
+
+    if (reg_load_regf(img_info, &(reg->regf)) != TSK_OK) {
+        tsk_fs_free(reg);
+        return NULL;
+    }
+
+
 
 
     fs->inode_walk = reg_inode_walk;

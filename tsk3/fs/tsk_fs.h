@@ -750,6 +750,7 @@ extern "C" {
         TSK_FS_TYPE_HFS = 0x00001000,   ///< HFS file system
         TSK_FS_TYPE_HFS_DETECT = 0x00001000,    ///< HFS auto detection
         TSK_FS_TYPE_REG = 0x00002000,    ///< Windows Registry
+        TSK_FS_TYPE_REG_DETECT = 0x00002000,    ///< Windows Registry detection
         TSK_FS_TYPE_UNSUPP = 0xffffffff,        ///< Unsupported file system
     };
     typedef enum TSK_FS_TYPE_ENUM TSK_FS_TYPE_ENUM;
@@ -810,6 +811,12 @@ extern "C" {
 #define TSK_FS_TYPE_ISRAW(ftype) \
     (((ftype) & TSK_FS_TYPE_RAW_DETECT)?1:0)
 
+    /**
+    * \ingroup fslib
+    * Macro that takes a file system type and returns 1 if the type
+    * is for a Registry "file system". */
+#define TSK_FS_TYPE_ISREG(ftype) \
+    (((ftype) & TSK_FS_TYPE_REG_DETECT)?1:0)
 
     /**
     * Flags for the FS_INFO structure 
