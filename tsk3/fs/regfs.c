@@ -33,12 +33,12 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     return 0;
 }
 
+uint8_t
 reg_block_walk(TSK_FS_INFO * fs,
     TSK_DADDR_T a_start_blk, TSK_DADDR_T a_end_blk,
     TSK_FS_BLOCK_WALK_FLAG_ENUM a_flags, TSK_FS_BLOCK_WALK_CB a_action,
     void *a_ptr)
 {
-    char *myname = "reg_block_walk";
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     return 0;
 }
@@ -113,8 +113,48 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "FILE SYSTEM INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "File System Type: Windows Registry\n");
-    tsk_fprintf(hFile, "Major Version: %d\n", reg->regf.major_version);
-    tsk_fprintf(hFile, "Minor Version: %d\n", reg->regf.minor_version);
+    tsk_fprintf(hFile, "Major Version: %d\n", 
+		(tsk_getu32(fs->endian, reg->regf.major_version)));
+    tsk_fprintf(hFile, "Minor Version: %d\n", 
+		(tsk_getu32(fs->endian, reg->regf.minor_version)));
+
+    if ((tsk_getu32(fs->endian, reg->regf.seq1) == 
+	 (tsk_getu32(fs->endian, reg->regf.seq2)))) {
+      tsk_fprintf(hFile, "Synchronized: %s\n", "Yes");
+    } else {
+      tsk_fprintf(hFile, "Synchronized: %s\n", "No");
+    }
+
+
+
+    char asc[512];
+    UTF16 *name16 = (UTF16 *) reg->regf.hive_name;
+    UTF8 *name8 = (UTF8 *) asc;
+    int retVal;
+    retVal = tsk_UTF16toUTF8(fs->endian, 
+			     (const UTF16 **) &name16,
+			     (UTF16 *) ((uintptr_t) name16 + 32),
+			     &name8,
+			     (UTF8 *) ((uintptr_t) name8 + sizeof(asc)),
+			     TSKlenientConversion);
+    
+    if (retVal != TSKconversionOK) {
+      if (tsk_verbose)
+	tsk_fprintf(stderr,
+		    "fsstat: Error converting REGF hive name label to UTF8: %d",
+		    retVal);
+      *name8 = '\0';
+    }
+    else if ((uintptr_t) name8 >= (uintptr_t) asc + sizeof(asc)) {
+      /* Make sure it is NULL Terminated */
+      asc[sizeof(asc) - 1] = '\0';
+    }
+    else {
+      *name8 = '\0';
+    }
+    tsk_fprintf(hFile, "Hive name: %s\n", asc);    
+
+
 
     return 0;
 }
@@ -260,37 +300,27 @@ reg_jopen(TSK_FS_INFO * fs, TSK_INUM_T inum)
 
 
 
-
-
+/**
+ * reg_load_regf
+ *   Read data into the supplied REGF, and do some sanity checking.
+ */
 TSK_RETVAL_ENUM
-reg_load_regf(TSK_IMG_INFO *img_info, REGF *regf) {
-    REGF buf;
+reg_load_regf(TSK_FS_INFO *fs_info, REGF *regf) {
     ssize_t count;
 
-    count = tsk_fs_read(img_info, 0, (uint8_t *)buf, 200);
-    if (count != 200) {
+    count = tsk_fs_read(fs_info, 0, (char *)regf, sizeof(REGF));
+    if (count != sizeof(REGF)) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_READ);
+        tsk_error_set_errstr("Failed to read REGF header structure");
         return TSK_ERR;
     }
 
-    if ((tsk_getu32(img_info->endian, regf->magic) != REG_REGF_MAGIC)) {
+    if ((tsk_getu32(fs_info->endian, regf->magic) != REG_REGF_MAGIC)) {
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr("REGF header has an invalid magic header");
         return TSK_ERR;
     }
-
-    regf->magic = tsk_getu32(img_info->endian, buf->magic);
-    regf->seq1 = tsk_getu32(img_info->endian, buf->seq1);
-    regf->seq2 = tsk_getu32(img_info->endian, buf->seq2);
-    regf->major_version = tsk_getu32(img_info->endian, buf->major_version);
-    regf->minor_version = tsk_getu32(img_info->endian, buf->minor_version);
-    regf->first_key_offset = tsk_getu32(img_info->endian, buf->first_key_offset);
-    regf->last_hbin_offset = tsk_getu32(img_info->endian, buf->last_hbin_offset);
-
-    // memcpy may be unsafe, but we do check that we got the correct length
-    // right after the tsk_fs_read for buf. So I think its safe.
-    memcpy(regf->hive_name, buf->hive_name, 60);
 
     return TSK_OK;
 }
@@ -304,8 +334,7 @@ reg_load_regf(TSK_IMG_INFO *img_info, REGF *regf) {
  * @param img_info Disk image to analyze
  * @param offset Byte offset where file system starts
  * @param ftype Specific type of file system
- * @param test NOT USED
- * @returns NULL on error or if data is not a Registry
+ * @param test NOT USED * @returns NULL on error or if data is not a Registry
  */
 TSK_FS_INFO *
 regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
@@ -337,8 +366,8 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->img_info = img_info;
     fs->offset = offset;
 
-    if (reg_load_regf(img_info, &(reg->regf)) != TSK_OK) {
-        tsk_fs_free(reg);
+    if (reg_load_regf(fs, &(reg->regf)) != TSK_OK) {
+        free(reg);
         return NULL;
     }
 

@@ -21,9 +21,12 @@
 extern "C" {
 #endif
 
+#define REG_REGF_MAGIC 0x66676572
 
+
+#define HBIN_SIZE 4096
 /** \internal
- * Only used to extract fields from a bufffer.
+ * Total size: 4096 bytes.
  */
 typedef struct {
 /* 0x00 */    uint8_t magic[4];    ///< "REGF", or 0x66676572
@@ -39,22 +42,16 @@ typedef struct {
 /* 0x28 */    uint8_t last_hbin_offset[4];
 /* 0x2C */    uint8_t ignored4[4];    ///< Unusued for parsing.
 /* 0x30 */    uint8_t hive_name[64]; ///< in unicode. TODO(wb): find exact length
-} REGF_template;
-
-typedef struct {
-    uint32_t magic;    ///< "REGF", or 0x66676572
-    uint32_t seq1;     ///< if seq1 == seq2, then the Registry is syncronized
-    uint32_t seq2;     ///< if seq1 == seq2, then the Registry is syncronized
-    uint32_t major_version;
-    uint32_t minor_version;
-    uint32_t first_key_offset; ///< HBIN[1] + first_key_offset == first key
-    uint32_t last_hbin_offset;
-    uint8_t hive_name[64]; ///< in unicode. TODO(wb): find exact length
+/* 0x70 */    uint8_t ignored[4096 - 0x70];
 } REGF;
 
 typedef struct {
-    TSK_FS_INFO fs_info;    /* super class */
-    REGF regf;
+  TSK_FS_INFO fs_info;    /* super class */
+  REGF regf;
+
+  uint8_t synchronized;
+  TSK_DADDR_T first_key_offset;
+  TSK_DADDR_T last_hbin_offset;
 } REGFS_INFO;
 
 #ifdef __cplusplus
