@@ -42,7 +42,7 @@ typedef struct {
 /* 0x28 */    uint8_t last_hbin_offset[4];
 /* 0x2C */    uint8_t ignored4[4];    ///< Unusued for parsing.
 /* 0x30 */    uint8_t hive_name[64]; ///< in unicode. TODO(wb): find exact length
-/* 0x70 */    uint8_t ignored[4096 - 0x70];
+/* 0x70 */    uint8_t ignored[HBIN_SIZE - 0x70];
 } REGF;
 
 typedef struct {

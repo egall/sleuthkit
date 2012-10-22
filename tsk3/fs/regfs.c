@@ -108,11 +108,16 @@ static uint8_t
 reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
-
+    char asc[512];
+    UTF16 *name16;
+    UTF8 *name8;
+    int retVal;
 
     tsk_fprintf(hFile, "FILE SYSTEM INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "File System Type: Windows Registry\n");
+
+    // TODO(wb): print readable versions
     tsk_fprintf(hFile, "Major Version: %d\n", 
 		(tsk_getu32(fs->endian, reg->regf.major_version)));
     tsk_fprintf(hFile, "Minor Version: %d\n", 
@@ -125,19 +130,14 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
       tsk_fprintf(hFile, "Synchronized: %s\n", "No");
     }
 
-
-
-    char asc[512];
-    UTF16 *name16 = (UTF16 *) reg->regf.hive_name;
-    UTF8 *name8 = (UTF8 *) asc;
-    int retVal;
+    name16 = (UTF16 *) reg->regf.hive_name;
+    name8 = (UTF8 *) asc;
     retVal = tsk_UTF16toUTF8(fs->endian, 
 			     (const UTF16 **) &name16,
 			     (UTF16 *) ((uintptr_t) name16 + 32),
 			     &name8,
 			     (UTF8 *) ((uintptr_t) name8 + sizeof(asc)),
 			     TSKlenientConversion);
-    
     if (retVal != TSKconversionOK) {
       if (tsk_verbose)
 	tsk_fprintf(stderr,
@@ -155,6 +155,29 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "Hive name: %s\n", asc);    
 
 
+    tsk_fprintf(hFile, "\nMETADATA INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+
+    tsk_fprintf(hFile, "Offset to first key: %" PRIu32 "\n",
+		(tsk_getu32(fs->endian, reg->regf.first_key_offset)));
+
+    tsk_fprintf(hFile, "Offset to last HBIN: %" PRIu32 "\n",
+		(tsk_getu32(fs->endian, reg->regf.last_hbin_offset)));
+
+    tsk_fprintf(hFile, "\nCONTENT INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Number of active cells: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of inactive cells: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of active bytes: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of inactive bytes: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of VK records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of NK records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of LF records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of LH records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of LI records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of RI records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of SK records: <unknown>\n"); //  TODO(wb)
+    tsk_fprintf(hFile, "Number of DB records: <unknown>\n"); //  TODO(wb)
 
     return 0;
 }
@@ -316,7 +339,7 @@ reg_load_regf(TSK_FS_INFO *fs_info, REGF *regf) {
         return TSK_ERR;
     }
 
-    if ((tsk_getu32(fs_info->endian, regf->magic) != REG_REGF_MAGIC)) {
+    if ((tsk_getu32(fs_info->endian, regf->magic)) != REG_REGF_MAGIC) {
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr("REGF header has an invalid magic header");
         return TSK_ERR;
