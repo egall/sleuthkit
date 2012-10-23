@@ -190,7 +190,195 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
     tsk_error_set_errstr("fscheck not implemented for Windows Registries yet");
     return 1;
 }
- 
+
+static TSK_RETVAL_ENUM
+reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "VK");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    ssize_t count;
+    uint8_t buf[4096];
+    REGFS_CELL_NK *nk;
+
+    if (cell->length > 4096) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("Registry cell corrupt: size too large 4");
+      return TSK_ERR;
+    }
+
+    count = tsk_fs_read(fs, (cell->inum), buf, cell->length);
+    if (count != cell->length) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_READ);
+      tsk_error_set_errstr("Failed to read cell structure");
+      return TSK_ERR;
+    }
+
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "NK");
+
+    nk = (REGFS_CELL_NK *)(buf + 4);
+
+    if ((tsk_gets32(fs->endian, nk->classname_offset)) == 0xFFFFFFFF) {
+      tsk_fprintf(hFile, "Class Name: %s\n", "None");
+    } else {
+      // TODO(wb): Testing required here.
+      char s[512];
+      char asc[512];
+      UTF16 *name16;
+      UTF8 *name8;
+      int retVal;
+      uint32_t classname_offset;
+      uint32_t classname_length;
+
+      classname_offset = (tsk_gets32(fs->endian, nk->classname_offset));
+      classname_length = (tsk_gets16(fs->endian, nk->classname_length));
+
+      if (classname_length > 512) {
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	tsk_error_set_errstr("NK classname string too long");
+	return TSK_ERR;
+      }
+
+      count = tsk_fs_read(fs, FIRST_HBIN_OFFSET + classname_offset + 4, 
+			  s, classname_length);
+      if (count != classname_length) {
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_FS_READ);
+	tsk_error_set_errstr("Failed to read NK classname string");
+	return TSK_ERR;
+      }
+
+      name16 = (UTF16 *) s;
+      name8 = (UTF8 *) asc;
+      retVal = tsk_UTF16toUTF8(fs->endian, 
+			       (const UTF16 **) &name16,
+			       (UTF16 *) ((uintptr_t) name16 + classname_length),
+			       &name8,
+			       (UTF8 *) ((uintptr_t) name8 + sizeof(asc)),
+			       TSKlenientConversion);
+      if (retVal != TSKconversionOK) {
+	if (tsk_verbose)
+	  tsk_fprintf(stderr,
+		      "fsstat: Error converting NK classname label to UTF8: %d",
+		      retVal);
+	*name8 = '\0';
+      }
+      else if ((uintptr_t) name8 >= (uintptr_t) asc + sizeof(asc)) {
+	/* Make sure it is NULL Terminated */
+	asc[sizeof(asc) - 1] = '\0';
+      }
+      else {
+	*name8 = '\0';
+      }
+      tsk_fprintf(hFile, "Class Name: %s\n", asc);    
+    }
+    
+
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "LF");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "LH");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "LI");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "RI");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "SK");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "DB");
+    return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
+		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    ssize_t count;
+    uint8_t buf[4096];
+
+    if (cell->length > 4096) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("Registry cell corrupt: size too large 2");
+      return TSK_ERR;
+    }
+
+    count = tsk_fs_read(fs, (cell->inum), buf, cell->length);
+    if (count != cell->length) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_READ);
+      tsk_error_set_errstr("Failed to read cell structure");
+      return TSK_ERR;
+    }
+
+    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+    tsk_fprintf(hFile, "Record Type: %s\n", "Unknown (Data Record?)");
+    tsk_fprintf(hFile, "Type identifier: 0x%x%x\n", *(buf + 4), *(buf + 5));
+    return TSK_OK;
+}
+
 static TSK_RETVAL_ENUM
 reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   ssize_t count;
@@ -200,6 +388,8 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
 
   // TODO(wb): Check range of file vs. inum value
   
+  cell->inum = inum;
+
   count = tsk_fs_read(fs, inum, buf, 4);
   if (count != 4) {
     tsk_error_reset();
@@ -219,7 +409,11 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   if (cell->length >= 4096) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-    tsk_error_set_errstr("Registry cell corrupt: size too large");
+    tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
+			 cell->length);
+    // TODO(wb): remove this debugging
+    printf("%d, 0x%x\n", inum, inum);
+    printf("0x%x 0x%x 0x%x 0x%x\n", buf[0], buf[1], buf[2], buf[3]);
     return TSK_ERR;
   }
 
@@ -233,28 +427,28 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   type = (tsk_getu16(fs->endian, buf));
 
   switch (type) {
-  case 0x766b:
+  case 0x6b76:
     cell->type = TSK_REGFS_RECORD_TYPE_VK;
     break;
-  case 0x6e6b:
+  case 0x6b6e:
     cell->type = TSK_REGFS_RECORD_TYPE_NK;
     break;
-  case 0x6c66:
+  case 0x666c:
     cell->type = TSK_REGFS_RECORD_TYPE_LF;
     break;
-  case 0x6c68:
+  case 0x686c:
     cell->type = TSK_REGFS_RECORD_TYPE_LH;
     break;
-  case 0x6c69:
+  case 0x696c:
     cell->type = TSK_REGFS_RECORD_TYPE_LI;
     break;
-  case 0x7269:
+  case 0x6972:
     cell->type = TSK_REGFS_RECORD_TYPE_RI;
     break;
-  case 0x736b:
+  case 0x6b73:
     cell->type = TSK_REGFS_RECORD_TYPE_SK;
     break;
-  case 0x6462:
+  case 0x6264:
     cell->type = TSK_REGFS_RECORD_TYPE_DB;
     break;
   default:
@@ -289,18 +483,49 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     tsk_fprintf(hFile, "CELL INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
 
-
     if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
       return 1;
     }
 
-      tsk_fprintf(hFile, "Cell: " PRIuINUM "\n", inum);    
+    tsk_fprintf(hFile, "Cell: %" PRIuINUM "\n", inum);    
     if (cell.is_allocated) {
       tsk_fprintf(hFile, "Allocated: %s\n", "Yes");    
     } else {
       tsk_fprintf(hFile, "Allocated: %s\n", "No");    
     }
-    tsk_fprintf(hFile, "Cell Size: " PRIuINUM "\n", cell.length);
+    tsk_fprintf(hFile, "Cell Size: %" PRIuINUM "\n", cell.length);
+
+    switch (cell.type) {
+    case TSK_REGFS_RECORD_TYPE_VK:
+      reg_istat_vk(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_NK:
+      reg_istat_nk(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_LF:
+      reg_istat_lf(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_LH:
+      reg_istat_lh(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_LI:
+      reg_istat_li(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_RI:
+      reg_istat_ri(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_SK:
+      reg_istat_sk(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_DB:
+      reg_istat_db(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    case TSK_REGFS_RECORD_TYPE_UNKNOWN:
+      // fall through intended
+    default:
+      reg_istat_unknown(fs, hFile, &cell, numblock, sec_skew);
+      break;
+    }
 
     return 0;
 }
