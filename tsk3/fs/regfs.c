@@ -190,6 +190,83 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
     tsk_error_set_errstr("fscheck not implemented for Windows Registries yet");
     return 1;
 }
+ 
+static TSK_RETVAL_ENUM
+reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
+  ssize_t count;
+  uint32_t len;
+  uint16_t type;
+  uint8_t  buf[4];
+
+  // TODO(wb): Check range of file vs. inum value
+  
+  count = tsk_fs_read(fs, inum, buf, 4);
+  if (count != 4) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("Failed to read cell structure");
+    return TSK_ERR;
+  }
+
+  len = (tsk_getu32(fs->endian, buf));
+  if (len & 1 << 31) {
+    cell->is_allocated = 1;
+    cell->length = (-1 * tsk_gets32(fs->endian, buf));
+  } else {
+    cell->is_allocated = 0;
+    cell->length = (tsk_getu32(fs->endian, buf));
+  }
+  if (cell->length >= 4096) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+    tsk_error_set_errstr("Registry cell corrupt: size too large");
+    return TSK_ERR;
+  }
+
+  count = tsk_fs_read(fs, inum + 4, buf, 2);
+  if (count != 2) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("Failed to read cell structure");
+    return TSK_ERR;
+  }
+  type = (tsk_getu16(fs->endian, buf));
+
+  switch (type) {
+  case 0x766b:
+    cell->type = TSK_REGFS_RECORD_TYPE_VK;
+    break;
+  case 0x6e6b:
+    cell->type = TSK_REGFS_RECORD_TYPE_NK;
+    break;
+  case 0x6c66:
+    cell->type = TSK_REGFS_RECORD_TYPE_LF;
+    break;
+  case 0x6c68:
+    cell->type = TSK_REGFS_RECORD_TYPE_LH;
+    break;
+  case 0x6c69:
+    cell->type = TSK_REGFS_RECORD_TYPE_LI;
+    break;
+  case 0x7269:
+    cell->type = TSK_REGFS_RECORD_TYPE_RI;
+    break;
+  case 0x736b:
+    cell->type = TSK_REGFS_RECORD_TYPE_SK;
+    break;
+  case 0x6462:
+    cell->type = TSK_REGFS_RECORD_TYPE_DB;
+    break;
+  default:
+    cell->type = TSK_REGFS_RECORD_TYPE_UNKNOWN;
+    break;
+  }
+  
+  return TSK_OK;
+}
+
+
+
 
 /**
  * Print details on a specific file to a file handle.
@@ -207,6 +284,24 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     TSK_INUM_T inum, TSK_DADDR_T numblock, int32_t sec_skew)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
+    REGFS_CELL cell;
+
+    tsk_fprintf(hFile, "CELL INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
+
+
+    if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
+      return 1;
+    }
+
+      tsk_fprintf(hFile, "Cell: " PRIuINUM "\n", inum);    
+    if (cell.is_allocated) {
+      tsk_fprintf(hFile, "Allocated: %s\n", "Yes");    
+    } else {
+      tsk_fprintf(hFile, "Allocated: %s\n", "No");    
+    }
+    tsk_fprintf(hFile, "Cell Size: " PRIuINUM "\n", cell.length);
+
     return 0;
 }
 
@@ -395,6 +490,8 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 
 
+    fs->first_inum = 4096;
+    fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + 4096;
 
 
     fs->inode_walk = reg_inode_walk;

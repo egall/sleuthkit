@@ -25,10 +25,33 @@ extern "C" {
 
 
 #define HBIN_SIZE 4096
-/** \internal
- * Total size: 4096 bytes.
- */
-typedef struct {
+
+
+
+  enum TSK_REGFS_RECORD_TYPE_ENUM {
+    TSK_REGFS_RECORD_TYPE_VK,  ///< "vk" 0x766b
+    TSK_REGFS_RECORD_TYPE_NK,  ///< "nk" 0x6e6b 
+    TSK_REGFS_RECORD_TYPE_LF,  ///< "lf" 0x6c66 
+    TSK_REGFS_RECORD_TYPE_LH,  ///< "lh" 0x6c68  
+    TSK_REGFS_RECORD_TYPE_LI,  ///< "li" 0x6c69   
+    TSK_REGFS_RECORD_TYPE_RI,  ///< "ri" 0x7269    
+    TSK_REGFS_RECORD_TYPE_SK,  ///< "sk" 0x736b     
+    TSK_REGFS_RECORD_TYPE_DB,  ///< "db" 0x6462      
+    TSK_REGFS_RECORD_TYPE_UNKNOWN,  ///< Unknown type, of course.
+  };
+  typedef enum TSK_REGFS_RECORD_TYPE_ENUM TSK_REGFS_RECORD_TYPE_ENUM;
+
+  typedef struct REGFS_CELL {
+    uint8_t  is_allocated;
+    uint32_t length;
+    TSK_REGFS_RECORD_TYPE_ENUM type;
+  } REGFS_CELL;
+
+
+  /** \internal
+   * Total size: 4096 bytes.
+   */
+  typedef struct {
 /* 0x00 */    uint8_t magic[4];    ///< "REGF", or 0x66676572
 /* 0x04 */    uint8_t seq1[4];     ///< if seq1 == seq2, then the Registry is syncronized
 /* 0x08 */    uint8_t seq2[4];     ///< if seq1 == seq2, then the Registry is syncronized
@@ -43,16 +66,16 @@ typedef struct {
 /* 0x2C */    uint8_t ignored4[4];    ///< Unusued for parsing.
 /* 0x30 */    uint8_t hive_name[64]; ///< in unicode. TODO(wb): find exact length
 /* 0x70 */    uint8_t ignored[HBIN_SIZE - 0x70];
-} REGF;
+  } REGF;
 
-typedef struct {
-  TSK_FS_INFO fs_info;    /* super class */
-  REGF regf;
-
-  uint8_t synchronized;
-  TSK_DADDR_T first_key_offset;
-  TSK_DADDR_T last_hbin_offset;
-} REGFS_INFO;
+  typedef struct {
+    TSK_FS_INFO fs_info;    /* super class */
+    REGF regf;
+    
+    uint8_t synchronized;
+    TSK_DADDR_T first_key_offset;
+    TSK_DADDR_T last_hbin_offset;
+  } REGFS_INFO;
 
 #ifdef __cplusplus
 }
