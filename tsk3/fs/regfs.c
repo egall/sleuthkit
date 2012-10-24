@@ -1,15 +1,10 @@
 /*
-** The Sleuth Kit
+** The Sleuth Kit 
 **
-** Brian Carrier [carrier <at> sleuthkit [dot] org]
-** Copyright (c) 2006-2011 Brian Carrier, Basis Technology.  All Rights reserved
-** Copyright (c) 2003-2005 Brian Carrier.  All rights reserved
+** Willi Ballenthin [william.ballenthin <at> mandiant [dot] com]
+** Copyright (c) 2012 Willi Ballenthin.  All rights reserved
 **
-** TASK
-** Copyright (c) 2002-2003 Brian Carrier, @stake Inc.  All rights reserved
-**
-** Copyright (c) 1997,1998,1999, International Business Machines
-** Corporation and others. All Rights Reserved.
+** This software is distributed under the Common Public License 1.0 
 */
 
 /**
@@ -94,9 +89,6 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
     tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
     tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
 			 cell->length);
-    // TODO(wb): remove this debugging
-    printf("%d, 0x%x\n", inum, inum);
-    printf("0x%x 0x%x 0x%x 0x%x\n", buf[0], buf[1], buf[2], buf[3]);
     return TSK_ERR;
   }
 
@@ -142,14 +134,6 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   return TSK_OK;
 }
 
-static uint8_t
-reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
-    TSK_INUM_T end_inum, TSK_FS_META_FLAG_ENUM flags,
-    TSK_FS_META_WALK_CB a_action, void *ptr)
-{
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    return 0;
-}
 
 /**
  * @return 1 on error, 0 otherwise.
@@ -246,7 +230,7 @@ reg_block_walk(TSK_FS_INFO * fs,
       }
 
       if (addr + cell.length > current_hbin_start + HBIN_SIZE - 1) {
-	// this is a problem. The Cell overran into the next HBIN header
+	// The Cell overran into the next HBIN header
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
         tsk_error_set_errstr("Cell overran into subsequent HBIN header");
@@ -269,6 +253,15 @@ reg_block_walk(TSK_FS_INFO * fs,
 }
 
 reg_block_getflags(TSK_FS_INFO * fs, TSK_DADDR_T a_addr)
+{
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
+    return 0;
+}
+
+static uint8_t
+reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
+    TSK_INUM_T end_inum, TSK_FS_META_FLAG_ENUM flags,
+    TSK_FS_META_WALK_CB a_action, void *ptr)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     return 0;
