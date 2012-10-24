@@ -20,9 +20,37 @@
 #include "tsk_fs_i.h"
 #include "tsk_regfs.h"
 
-
-
-
+static TSK_RETVAL_ENUM
+regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
+	       uint8_t *utf16, ssize_t utf16_length,
+	       char *utf8, ssize_t utf8_length) {
+  UTF16 *name16;
+  UTF8 *name8;
+  int retVal;
+  
+  name16 = (UTF16 *) utf16;
+  name8 = (UTF8 *) utf8;
+  retVal = tsk_UTF16toUTF8(endian, 
+			   (const UTF16 **) &name16,
+			   (UTF16 *) ((uintptr_t) name16 + utf16_length),
+			   &name8,
+			   (UTF8 *) ((uintptr_t) name8 + utf8_length),
+			   TSKlenientConversion);
+  if (retVal != TSKconversionOK) {
+    if (tsk_verbose)
+      tsk_fprintf(stderr, "fsstat: Error converting %s to UTF8: %d",
+		  error_class, retVal);
+    *name8 = '\0';
+  }
+  else if ((uintptr_t) name8 >= (uintptr_t) utf8 + utf8_length) {
+    /* Make sure it is NULL Terminated */
+    utf8[utf8_length - 1] = '\0';
+  }
+  else {
+    *name8 = '\0';
+  }
+  return TSK_OK;
+}
 
 static uint8_t
 reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
@@ -109,11 +137,8 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     char asc[512];
-    UTF16 *name16;
-    UTF8 *name8;
-    int retVal;
 
-    tsk_fprintf(hFile, "FILE SYSTEM INFORMATION\n");
+    tsk_fprintf(hFile, "\nFILE SYSTEM INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "File System Type: Windows Registry\n");
 
@@ -130,27 +155,13 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
       tsk_fprintf(hFile, "Synchronized: %s\n", "No");
     }
 
-    name16 = (UTF16 *) reg->regf.hive_name;
-    name8 = (UTF8 *) asc;
-    retVal = tsk_UTF16toUTF8(fs->endian, 
-			     (const UTF16 **) &name16,
-			     (UTF16 *) ((uintptr_t) name16 + 32),
-			     &name8,
-			     (UTF8 *) ((uintptr_t) name8 + sizeof(asc)),
-			     TSKlenientConversion);
-    if (retVal != TSKconversionOK) {
-      if (tsk_verbose)
-	tsk_fprintf(stderr,
-		    "fsstat: Error converting REGF hive name label to UTF8: %d",
-		    retVal);
-      *name8 = '\0';
-    }
-    else if ((uintptr_t) name8 >= (uintptr_t) asc + sizeof(asc)) {
-      /* Make sure it is NULL Terminated */
-      asc[sizeof(asc) - 1] = '\0';
-    }
-    else {
-      *name8 = '\0';
+    if (regfs_utf16to8(fs->endian, "REGF hive name label",
+		       reg->regf.hive_name, 30,
+		       asc, 512) != TSK_OK) {
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+	tsk_error_set_errstr("Failed to convert REGF hive name string to UTF-8");
+	return 1;
     }
     tsk_fprintf(hFile, "Hive name: %s\n", asc);    
 
@@ -195,28 +206,29 @@ static TSK_RETVAL_ENUM
 reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "VK");
     return TSK_OK;
 }
+
 
 static TSK_RETVAL_ENUM
 reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     ssize_t count;
-    uint8_t buf[4096];
+    uint8_t buf[HBIN_SIZE];
     REGFS_CELL_NK *nk;
 
-    if (cell->length > 4096) {
+    if (cell->length > HBIN_SIZE) {
       tsk_error_reset();
       tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
       tsk_error_set_errstr("Registry cell corrupt: size too large 4");
       return TSK_ERR;
     }
 
-    count = tsk_fs_read(fs, (cell->inum), buf, cell->length);
+    count = tsk_fs_read(fs, (cell->inum), (char *)buf, cell->length);
     if (count != cell->length) {
       tsk_error_reset();
       tsk_error_set_errno(TSK_ERR_FS_READ);
@@ -233,12 +245,8 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     if ((tsk_gets32(fs->endian, nk->classname_offset)) == 0xFFFFFFFF) {
       tsk_fprintf(hFile, "Class Name: %s\n", "None");
     } else {
-      // TODO(wb): Testing required here.
       char s[512];
       char asc[512];
-      UTF16 *name16;
-      UTF8 *name8;
-      int retVal;
       uint32_t classname_offset;
       uint32_t classname_length;
 
@@ -261,31 +269,25 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 	return TSK_ERR;
       }
 
-      name16 = (UTF16 *) s;
-      name8 = (UTF8 *) asc;
-      retVal = tsk_UTF16toUTF8(fs->endian, 
-			       (const UTF16 **) &name16,
-			       (UTF16 *) ((uintptr_t) name16 + classname_length),
-			       &name8,
-			       (UTF8 *) ((uintptr_t) name8 + sizeof(asc)),
-			       TSKlenientConversion);
-      if (retVal != TSKconversionOK) {
-	if (tsk_verbose)
-	  tsk_fprintf(stderr,
-		      "fsstat: Error converting NK classname label to UTF8: %d",
-		      retVal);
-	*name8 = '\0';
+      if (regfs_utf16to8(fs->endian, "NK class name", (uint8_t *)s, 
+			 512, asc, 512) != TSK_OK) {
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+	tsk_error_set_errstr("Failed to convert NK classname string to UTF-8");
+	return TSK_ERR;
       }
-      else if ((uintptr_t) name8 >= (uintptr_t) asc + sizeof(asc)) {
-	/* Make sure it is NULL Terminated */
-	asc[sizeof(asc) - 1] = '\0';
-      }
-      else {
-	*name8 = '\0';
-      }
+
       tsk_fprintf(hFile, "Class Name: %s\n", asc);    
     }
-    
+
+    if ((tsk_getu16(fs->endian, nk->is_root)) == 0x2C) {
+      tsk_fprintf(hFile, "Root Record: %s\n", "Yes");
+    } else {
+      tsk_fprintf(hFile, "Root Record: %s\n", "No");
+    }
+
+    tsk_fprintf(hFile, "Parent Record: %" PRIuINUM "\n", 
+		FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
 
     return TSK_OK;
 }
@@ -355,16 +357,16 @@ reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     ssize_t count;
-    uint8_t buf[4096];
+    uint8_t buf[HBIN_SIZE];
 
-    if (cell->length > 4096) {
+    if (cell->length > HBIN_SIZE) {
       tsk_error_reset();
       tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
       tsk_error_set_errstr("Registry cell corrupt: size too large 2");
       return TSK_ERR;
     }
 
-    count = tsk_fs_read(fs, (cell->inum), buf, cell->length);
+    count = tsk_fs_read(fs, (cell->inum), (char *)buf, cell->length);
     if (count != cell->length) {
       tsk_error_reset();
       tsk_error_set_errno(TSK_ERR_FS_READ);
@@ -390,7 +392,7 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   
   cell->inum = inum;
 
-  count = tsk_fs_read(fs, inum, buf, 4);
+  count = tsk_fs_read(fs, inum, (char *)buf, 4);
   if (count != 4) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_READ);
@@ -406,7 +408,7 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
     cell->is_allocated = 0;
     cell->length = (tsk_getu32(fs->endian, buf));
   }
-  if (cell->length >= 4096) {
+  if (cell->length >= HBIN_SIZE) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
     tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
@@ -417,7 +419,7 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
     return TSK_ERR;
   }
 
-  count = tsk_fs_read(fs, inum + 4, buf, 2);
+  count = tsk_fs_read(fs, inum + 4, (char *)buf, 2);
   if (count != 2) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_READ);
@@ -480,7 +482,7 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     REGFS_CELL cell;
 
-    tsk_fprintf(hFile, "CELL INFORMATION\n");
+    tsk_fprintf(hFile, "\nCELL INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
 
     if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
@@ -715,8 +717,12 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 
 
-    fs->first_inum = 4096;
-    fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + 4096;
+    fs->first_inum = FIRST_HBIN_OFFSET;
+    fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
+    // TODO(wb): set root inode
+    // TODO(wb): set num inodes
+    // TODO(wb): figure out what blocks are
+
 
 
     fs->inode_walk = reg_inode_walk;
