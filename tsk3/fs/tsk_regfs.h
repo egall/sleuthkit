@@ -1,17 +1,82 @@
 /*
 ** The Sleuth Kit 
 **
-** Brian Carrier [carrier <at> sleuthkit [dot] org]
-** Copyright (c) 2003-2011 Brian Carrier.  All rights reserved
+** Willi Ballenthin [william.ballenthin <at> mandiant [dot] com]
+** Copyright (c) 2012 Willi Ballenthin.  All rights reserved
 **
-** TASK
-** Copyright (c) 2002 Brian Carrier, @stake Inc.  All rights reserved
-** 
 ** This software is distributed under the Common Public License 1.0 
 */
 
 /*
  * Contains the structures and function APIs for Windows Registry support.
+ * 
+ * HACKING
+ *   Blocks --> Cells
+ *   Inodes --> Records
+ *   Now, Records are typically stored in one Cell, and the cell consists
+ *     of nothing extra besides the `length` header.  Both Cells and 
+ *     Records may have dynamic sizes (eg. not fixed at 0x20, or 0x30).
+ *     A large record, such as a data record, may be split among a few
+ *     Cells.  
+ *   The Registry provides offsets to structures as Cell offsets.
+ *     The context of the function call or data structure will determine
+ *     if an offset refers to a Cell or Record.
+ *   Use `tsk_malloc` over `malloc`. It zeros memory, too.
+ *   Use `tsk_remalloc` over `remalloc`.
+ *   Use `free` as usual.
+ * 
+ *   Functions, and their uses:
+ *     fs->open
+ *       Allocates a REGFS_INFO structure on the heap.
+ *       Sets the appropriate function pointers.
+ *       Sets basic file system metadata in the REGFS_INFO structure.
+ *     fs->close
+ *       Frees a REGFS_INFO structure.
+ *     fs->block_walk
+ *       Iterates through each Cell, and calls a callback function 
+ *       with the TSK_FS_BLOCK pointer for the Cell. Only Cells whose
+ *       attributes match a set of filter flags are passed to the 
+ *       callback.  Flags include ALLOC'd and UNALLOC'd.
+ *     fs->block_getflags
+ *       Get the flags associated with a particular Cell.
+ *       Flags include ALLOC'd and UNALLOC'd.
+ *     fs->inode_walk
+ *       Iterates through each Record, and calls a callback function 
+ *       with the TSK_FS_FILE pointer for the Record. Only Records whose
+ *       attributes match a set of filter flags are passed to the 
+ *       callback.  Flags include ALLOC'd and UNALLOC'd.
+ *     fs->istat
+ *       Use tsk_fs_file_open_meta to acquire a TSK_FS_FILE pointer
+ *       for the requested Record.  Then, print out relevant data.
+ *     fs->file_add_meta
+ *       Given a TSK_FS_FILE, allocate memory (if necessary) for the
+ *       metadata stored in TSK_FS_META substructure using 
+ *       tsk_fs_meta_alloc.  This structure may also be reset by 
+ *       tsk_fs_meta_reset.  Then, set relevant metadata for the
+ *       TSK_FS_META substructure.
+ *     fs->get_default_attr_type
+ *       Given a TSK_FS_FILE, return the default attribute type.
+ *       This is probably TSK_FS_ATTR_TYPE_DEFAULT.
+ *     fs->load_attrs
+ *       Load data locations for a Record into runs.  This is how TSK will 
+ *       access the data for a Record if you request it.
+ *     fs->dir_open_meta
+ *       Allocate (with tsk_fs_dir_alloc) or reset a TSK_FS_DIR structure,
+ *       set the TSK_FS_FILE substructure, and add the names of entries
+ *       in the directory as TSK_FS_NAME structures (which have inode
+ *       numbers).
+ *     fs->name_cmp
+ *       Compare two key names or value names case insensitively.
+ *     fs->fsstat
+ *       Print relevant information about the Registry file.
+ *     fs->fscheck
+ *       Unsupported.
+ *     fs->jblk_walk
+ *       There is no journal in the Registry. Unsupported.
+ *     fs->jentry_walk
+ *       There is no journal in the Registry. Unsupported.
+ *     fs->jopen
+ *       There is no journal in the Registry. Unsupported.
  */
 
 #ifndef _TSK_REGFS_H
@@ -69,7 +134,7 @@ extern "C" {
 /*  0x44 */  uint8_t unused11[0x4];
 /*  0x48 */  uint8_t name_length[0x2];
 /*  0x4A */  uint8_t classname_length[0x2]; ///< In bytes, but classname is Unicode
-/*  0x4C */  uint8_t name_offset[0x4]; ///< Offset relative to record start
+/*  0x4C */  uint8_t name[0x4]; ///< This may have a variable length
     } REGFS_CELL_NK;
 
   /** \internal

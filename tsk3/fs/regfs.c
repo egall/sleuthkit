@@ -52,6 +52,96 @@ regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
   return TSK_OK;
 }
 
+/**
+ * Given the address as `inum`, load metadata about the Cell into 
+ * the cell pointed to by `cell`.
+ * @return TSK_OK on success, TSK_ERR on error.
+ */
+static TSK_RETVAL_ENUM
+reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
+  ssize_t count;
+  uint32_t len;
+  uint16_t type;
+  uint8_t  buf[4];
+
+  if (inum < fs->first_block || inum > fs->last_block) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
+    tsk_error_set_errstr("Invalid block number to load: %" PRIuDADDR "", inum);
+    return TSK_ERR;
+  }
+
+  cell->inum = inum;
+
+  count = tsk_fs_read(fs, inum, (char *)buf, 4);
+  if (count != 4) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("Failed to read cell structure");
+    return TSK_ERR;
+  }
+
+  len = (tsk_getu32(fs->endian, buf));
+  if (len & 1 << 31) {
+    cell->is_allocated = 1;
+    cell->length = (-1 * tsk_gets32(fs->endian, buf));
+  } else {
+    cell->is_allocated = 0;
+    cell->length = (tsk_getu32(fs->endian, buf));
+  }
+  if (cell->length >= HBIN_SIZE) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+    tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
+			 cell->length);
+    // TODO(wb): remove this debugging
+    printf("%d, 0x%x\n", inum, inum);
+    printf("0x%x 0x%x 0x%x 0x%x\n", buf[0], buf[1], buf[2], buf[3]);
+    return TSK_ERR;
+  }
+
+  count = tsk_fs_read(fs, inum + 4, (char *)buf, 2);
+  if (count != 2) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("Failed to read cell structure");
+    return TSK_ERR;
+  }
+  type = (tsk_getu16(fs->endian, buf));
+
+  switch (type) {
+  case 0x6b76:
+    cell->type = TSK_REGFS_RECORD_TYPE_VK;
+    break;
+  case 0x6b6e:
+    cell->type = TSK_REGFS_RECORD_TYPE_NK;
+    break;
+  case 0x666c:
+    cell->type = TSK_REGFS_RECORD_TYPE_LF;
+    break;
+  case 0x686c:
+    cell->type = TSK_REGFS_RECORD_TYPE_LH;
+    break;
+  case 0x696c:
+    cell->type = TSK_REGFS_RECORD_TYPE_LI;
+    break;
+  case 0x6972:
+    cell->type = TSK_REGFS_RECORD_TYPE_RI;
+    break;
+  case 0x6b73:
+    cell->type = TSK_REGFS_RECORD_TYPE_SK;
+    break;
+  case 0x6264:
+    cell->type = TSK_REGFS_RECORD_TYPE_DB;
+    break;
+  default:
+    cell->type = TSK_REGFS_RECORD_TYPE_UNKNOWN;
+    break;
+  }
+  
+  return TSK_OK;
+}
+
 static uint8_t
 reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     TSK_INUM_T end_inum, TSK_FS_META_FLAG_ENUM flags,
@@ -61,6 +151,9 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     return 0;
 }
 
+/**
+ * @return 1 on error, 0 otherwise.
+ */
 uint8_t
 reg_block_walk(TSK_FS_INFO * fs,
     TSK_DADDR_T a_start_blk, TSK_DADDR_T a_end_blk,
@@ -68,6 +161,110 @@ reg_block_walk(TSK_FS_INFO * fs,
     void *a_ptr)
 {
     REGFS_INFO *reg = (REGFS_INFO *) fs;
+    REGFS_CELL cell;
+
+    tsk_error_reset();
+
+    if (a_start_blk < fs->first_block || a_start_blk > fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr("%s: Start block: %" PRIuDADDR "", myname,
+            a_start_blk);
+        return 1;
+    }
+    if (a_end_blk < fs->first_block || a_end_blk > fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr("%s: End block: %" PRIuDADDR "", myname,
+            a_end_blk);
+        return 1;
+    }
+
+    if (tsk_verbose) {
+      tsk_fprintf(stderr,
+		  "regfs_block_walk: Block Walking %" PRIuDADDR " to %"
+		  PRIuDADDR "\n", a_start_blk, a_end_blk);
+    }
+
+    /* Sanity check on a_flags -- make sure at least one ALLOC is set */
+    if (((a_flags & TSK_FS_BLOCK_WALK_FLAG_ALLOC) == 0) &&
+        ((a_flags & TSK_FS_BLOCK_WALK_FLAG_UNALLOC) == 0)) {
+        a_flags |=
+            (TSK_FS_BLOCK_WALK_FLAG_ALLOC |
+            TSK_FS_BLOCK_WALK_FLAG_UNALLOC);
+    }
+
+    if (((a_flags & TSK_FS_BLOCK_WALK_FLAG_META) == 0) &&
+        ((a_flags & TSK_FS_BLOCK_WALK_FLAG_CONT) == 0)) {
+        a_flags |=
+            (TSK_FS_BLOCK_WALK_FLAG_CONT | TSK_FS_BLOCK_WALK_FLAG_META);
+    }
+
+    if ((fs_block = tsk_fs_block_alloc(fs)) == NULL) {
+        return 1;
+    }
+
+    addr = a_start_blk;
+
+    uint32_t current_hbin_start;
+
+    current_hbin_start = addr - (addr % HBIN_SIZE);
+
+    while (addr < a_end_blk) {
+      int myflags;      
+
+      // TODO(wb) be sure not to overrun image
+
+
+      if (reg_load_cell(fs, &cell, addr) == TSK_ERR) {
+	tsk_fs_block_free(fs_block);
+	return 1;
+      }
+      myflags = 0;
+
+      if (cell.is_allocated) {
+	myflags = TSK_FS_BLOCK_FLAG_ALLOC;
+      } else {
+	myflags = TSK_FS_BLOCK_FLAG_UNALLOC;
+      }
+
+      switch (cell.type) {
+      case TSK_REGFS_RECORD_TYPE_NK: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_LF: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_LH: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_LI: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_RI: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_DB: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_SK: // fall through intended
+      case TSK_REGFS_RECORD_TYPE_VK: // fall through intended
+	myflags |= TSK_FS_BLOCK_FLAG_META;
+	break;
+      case TSK_REGFS_RECORD_TYPE_UNKNOWN:
+      default:
+	myflags |= TSK_FS_BLOCK_FLAG_CONT;
+	break;
+      }
+
+      if (addr + cell.length > current_hbin_start + HBIN_SIZE - 1) {
+	// this is a problem. The Cell overran into the next HBIN header
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
+        tsk_error_set_errstr("Cell overran into subsequent HBIN header");
+	tsk_fs_block_free(fs_block);
+        return 1;
+      }
+
+
+      addr += cell.length;
+
+      // skip HBIN headers
+      if (addr > current_hbin_start + HBIN_SIZE) {
+	current_hbin_start += HBIN_SIZE;
+	addr = current_hbin_start + 0x20;
+      }
+    }
+
+    tsk_fs_block_free(fs_block);
     return 0;
 }
 
@@ -220,6 +417,14 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     ssize_t count;
     uint8_t buf[HBIN_SIZE];
     REGFS_CELL_NK *nk;
+    char s[512]; // to be used throughout, temporarily
+    uint16_t name_length;
+
+    // TODO(wb): need a call to the following function
+    // tsk_fs_file_open_meta(TSK_FS_INFO * a_fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T a_addr)
+    // and use the TSK_FS_FILE structure instead of
+    // directly accessing the REGFS_CELL_NK memory structure
+
 
     if (cell->length > HBIN_SIZE) {
       tsk_error_reset();
@@ -236,7 +441,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       return TSK_ERR;
     }
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "NK");
 
@@ -245,7 +450,6 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     if ((tsk_gets32(fs->endian, nk->classname_offset)) == 0xFFFFFFFF) {
       tsk_fprintf(hFile, "Class Name: %s\n", "None");
     } else {
-      char s[512];
       char asc[512];
       uint32_t classname_offset;
       uint32_t classname_length;
@@ -280,11 +484,43 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       tsk_fprintf(hFile, "Class Name: %s\n", asc);    
     }
 
+    name_length = (tsk_getu16(fs->endian, nk->name_length));
+    if (name_length > 512) {
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	tsk_error_set_errstr("NK key name string too long");
+	return TSK_ERR;
+    }
+
+    strncpy(s, nk->name, name_length);
+    tsk_fprintf(hFile, "Key Name: %s\n", s);
+
     if ((tsk_getu16(fs->endian, nk->is_root)) == 0x2C) {
       tsk_fprintf(hFile, "Root Record: %s\n", "Yes");
     } else {
       tsk_fprintf(hFile, "Root Record: %s\n", "No");
     }
+
+    if (sec_skew != 0) {
+        tsk_fprintf(hFile, "\nAdjusted Entry Times:\n");
+
+        if (fs_meta->mtime)
+            fs_meta->mtime -= sec_skew;
+
+        tsk_fprintf(hFile, "Modified:\t%s\n",
+            tsk_fs_time_to_str(fs_meta->mtime, timeBuf));
+
+        if (fs_meta->mtime == 0)
+            fs_meta->mtime += sec_skew;
+
+        tsk_fprintf(hFile, "\nOriginal Entry Times:\n");
+    }
+    else {
+        tsk_fprintf(hFile, "\Entry Times:\n");
+    }
+    tsk_fprintf(hFile, "Modified:\t%s\n", tsk_fs_time_to_str(fs_meta->mtime,
+            timeBuf));
+
 
     tsk_fprintf(hFile, "Parent Record: %" PRIuINUM "\n", 
 		FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
@@ -381,85 +617,6 @@ reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
     return TSK_OK;
 }
 
-static TSK_RETVAL_ENUM
-reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
-  ssize_t count;
-  uint32_t len;
-  uint16_t type;
-  uint8_t  buf[4];
-
-  // TODO(wb): Check range of file vs. inum value
-  
-  cell->inum = inum;
-
-  count = tsk_fs_read(fs, inum, (char *)buf, 4);
-  if (count != 4) {
-    tsk_error_reset();
-    tsk_error_set_errno(TSK_ERR_FS_READ);
-    tsk_error_set_errstr("Failed to read cell structure");
-    return TSK_ERR;
-  }
-
-  len = (tsk_getu32(fs->endian, buf));
-  if (len & 1 << 31) {
-    cell->is_allocated = 1;
-    cell->length = (-1 * tsk_gets32(fs->endian, buf));
-  } else {
-    cell->is_allocated = 0;
-    cell->length = (tsk_getu32(fs->endian, buf));
-  }
-  if (cell->length >= HBIN_SIZE) {
-    tsk_error_reset();
-    tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-    tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
-			 cell->length);
-    // TODO(wb): remove this debugging
-    printf("%d, 0x%x\n", inum, inum);
-    printf("0x%x 0x%x 0x%x 0x%x\n", buf[0], buf[1], buf[2], buf[3]);
-    return TSK_ERR;
-  }
-
-  count = tsk_fs_read(fs, inum + 4, (char *)buf, 2);
-  if (count != 2) {
-    tsk_error_reset();
-    tsk_error_set_errno(TSK_ERR_FS_READ);
-    tsk_error_set_errstr("Failed to read cell structure");
-    return TSK_ERR;
-  }
-  type = (tsk_getu16(fs->endian, buf));
-
-  switch (type) {
-  case 0x6b76:
-    cell->type = TSK_REGFS_RECORD_TYPE_VK;
-    break;
-  case 0x6b6e:
-    cell->type = TSK_REGFS_RECORD_TYPE_NK;
-    break;
-  case 0x666c:
-    cell->type = TSK_REGFS_RECORD_TYPE_LF;
-    break;
-  case 0x686c:
-    cell->type = TSK_REGFS_RECORD_TYPE_LH;
-    break;
-  case 0x696c:
-    cell->type = TSK_REGFS_RECORD_TYPE_LI;
-    break;
-  case 0x6972:
-    cell->type = TSK_REGFS_RECORD_TYPE_RI;
-    break;
-  case 0x6b73:
-    cell->type = TSK_REGFS_RECORD_TYPE_SK;
-    break;
-  case 0x6264:
-    cell->type = TSK_REGFS_RECORD_TYPE_DB;
-    break;
-  default:
-    cell->type = TSK_REGFS_RECORD_TYPE_UNKNOWN;
-    break;
-  }
-  
-  return TSK_OK;
-}
 
 
 
@@ -546,26 +703,6 @@ int
 reg_name_cmp(TSK_FS_INFO * a_fs_info, const char *s1, const char *s2)
 {
     return strcasecmp(s1, s2);
-}
-
-/** \internal
- * NTFS-specific function (pointed to in FS_INFO) that maps a security ID
- * to an ASCII printable string.
- * Read the contents of the STANDARD_INFORMATION attribute of a file
- * to get the security id. Once we have the security id, we will
- * search $Secure:$SII to find a matching security id. That $SII entry
- * will contain the offset within the $SDS stream for the $SDS entry,
- * which contains the owner SID
- *
- * @param a_fs_file File to get security info on
- * @param sid_str [out] location where string representation of security info will be stored.
- Caller must free the string.
- * @returns 1 on error
- */
-static uint8_t
-reg_file_get_sidstr(TSK_FS_FILE * a_fs_file, char **sid_str)
-{
-    return 0;
 }
 
 /**
@@ -721,9 +858,9 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
     // TODO(wb): set root inode
     // TODO(wb): set num inodes
-    // TODO(wb): figure out what blocks are
-
-
+    fs->first_block = FIRST_HBIN_OFFSET + 0x20;
+    fs->last_block = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
+    fs->last_block_act = img_info->size - HBIN_SIZE;
 
     fs->inode_walk = reg_inode_walk;
     fs->block_walk = reg_block_walk;
