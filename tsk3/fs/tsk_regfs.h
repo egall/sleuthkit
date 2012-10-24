@@ -11,19 +11,24 @@
  * Contains the structures and function APIs for Windows Registry support.
  * 
  * HACKING
- *   Blocks --> Cells
- *   Inodes --> Records
- *   Now, Records are typically stored in one Cell, and the cell consists
- *     of nothing extra besides the `length` header.  Both Cells and 
- *     Records may have dynamic sizes (eg. not fixed at 0x20, or 0x30).
- *     A large record, such as a data record, may be split among a few
- *     Cells.  
- *   The Registry provides offsets to structures as Cell offsets.
- *     The context of the function call or data structure will determine
- *     if an offset refers to a Cell or Record.
+ *   Blocks --> HBINS
+ *   Inodes --> Cells (that contain Records)
+ *   Once upon a time Blocks were translated to Cells, and Inodes to 
+ *     Records.  This didn't work in TSK, because the framework expects
+ *     filesystems to have a constant blocksize.  Rather than retro-fitting
+ *     additional support for dynamic blocksizes, we call HBINs Blocks.
+ *     HBINS have a constant size (at least, as far as anyone has seen), 
+ *     and are the smallest structures in the Registy where this is the case.
+ *   Cells are allocation units with dynamic sizes.  They are basically 
+ *     just a buffer which an initial 4 byte length field. Records typically
+ *     fit within one Cell; however, this is not guaranteed for large values.
+ *   Offsets within the Registry point to the start of a Cell.
+ *   We'll consider an Inode a Cell that contains a Record. 
  *   Use `tsk_malloc` over `malloc`. It zeros memory, too.
  *   Use `tsk_remalloc` over `remalloc`.
  *   Use `free` as usual.
+ *   When catching an error from another TSK function, don't reset 
+ *     the errno, unless you're changing it. 
  * 
  *   Functions, and their uses:
  *     fs->open
@@ -33,10 +38,11 @@
  *     fs->close
  *       Frees a REGFS_INFO structure.
  *     fs->block_walk
- *       Iterates through each Cell, and calls a callback function 
- *       with the TSK_FS_BLOCK pointer for the Cell. Only Cells whose
+ *       Iterates through each HBIN, and calls a callback function 
+ *       with the TSK_FS_BLOCK pointer for the HBIN. Only HBIN whose
  *       attributes match a set of filter flags are passed to the 
- *       callback.  Flags include ALLOC'd and UNALLOC'd.
+ *       callback.  Flags include ALLOC'd and UNALLOC'd.  But only ALLOC
+ *       really makes any sense when we are talking about HBINs.
  *     fs->block_getflags
  *       Get the flags associated with a particular Cell.
  *       Flags include ALLOC'd and UNALLOC'd.

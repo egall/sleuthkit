@@ -144,6 +144,118 @@ reg_block_walk(TSK_FS_INFO * fs,
     TSK_FS_BLOCK_WALK_FLAG_ENUM a_flags, TSK_FS_BLOCK_WALK_CB a_action,
     void *a_ptr)
 {
+    TSK_FS_BLOCK *fs_block;
+    REGFS_INFO *reg;
+    TSK_DADDR_T blknum;
+    uint8_t retval;
+    reg = (REGFS_INFO *) fs;
+    
+    tsk_error_reset();
+
+    if (tsk_verbose) {
+      tsk_fprintf(stderr,
+		  "regfs_block_walk: Block Walking %" PRIuDADDR " to %"
+		  PRIuDADDR "\n", a_start_blk, a_end_blk);
+    }
+
+    if (a_start_blk < fs->first_block || a_start_blk > fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+	tsk_error_set_errstr("Invalid block walk start block");
+        return 1;
+    }
+    if (a_end_blk < fs->first_block || a_end_blk > fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+	tsk_error_set_errstr("Invalid block walk end Block");
+        return 1;
+    }
+
+    // Sanity check on a_flags -- make sure at least one ALLOC is set 
+    if (((a_flags & TSK_FS_BLOCK_WALK_FLAG_ALLOC) == 0) &&
+        ((a_flags & TSK_FS_BLOCK_WALK_FLAG_UNALLOC) == 0)) {
+        a_flags |=
+            (TSK_FS_BLOCK_WALK_FLAG_ALLOC |
+             TSK_FS_BLOCK_WALK_FLAG_UNALLOC);
+    }
+    if (((a_flags & TSK_FS_BLOCK_WALK_FLAG_META) == 0) &&
+        ((a_flags & TSK_FS_BLOCK_WALK_FLAG_CONT) == 0)) {
+        a_flags |=
+            (TSK_FS_BLOCK_WALK_FLAG_CONT | TSK_FS_BLOCK_WALK_FLAG_META);
+    }
+
+    if ((fs_block = tsk_fs_block_alloc(fs)) == NULL) {
+        return 1;
+    }
+
+    blknum = a_start_blk;
+
+    while (blknum < a_end_blk) {
+      ssize_t count;
+      uint8_t data_buf[HBIN_SIZE];
+
+      if (tsk_verbose) {
+	tsk_fprintf(stderr,
+		    "\nregfs_block_walk: Reading block %"  PRIuDADDR 
+		    " (offset %"  PRIuDADDR  
+		    ") for %" PRIuDADDR  " bytes\n",
+		    blknum, blknum * 4096, HBIN_SIZE);
+      }
+
+      count = tsk_fs_read_block(fs, blknum, data_buf, HBIN_SIZE);
+      if (count != HBIN_SIZE) {
+	tsk_fs_block_free(fs_block);
+	return 1;
+      }
+
+      if (tsk_fs_block_set(fs, fs_block, blknum,
+			   TSK_FS_BLOCK_FLAG_ALLOC | 
+			   TSK_FS_BLOCK_FLAG_META | 
+			   TSK_FS_BLOCK_FLAG_CONT | 
+			   TSK_FS_BLOCK_FLAG_RAW,
+			   data_buf) != 0) {
+	tsk_fs_block_free(fs_block);
+	return 1;
+      }
+
+      retval = a_action(fs_block, a_ptr);
+      if (retval == TSK_WALK_STOP) {
+	tsk_fs_block_free(fs_block);
+	return 0;
+      }
+      else if (retval == TSK_WALK_ERROR) {
+	tsk_fs_block_free(fs_block);
+	return 1;
+      }
+      
+      blknum += 1;
+    }
+
+    tsk_fs_block_free(fs_block);
+    return 0;
+}
+
+/**
+ * HBINs are always allocated, if they exist in the Registry, and they
+ *   may contain both value content and key structures.
+ */ 
+TSK_FS_BLOCK_FLAG_ENUM
+reg_block_getflags(TSK_FS_INFO * fs, TSK_DADDR_T a_addr)
+{
+    return TSK_FS_BLOCK_FLAG_ALLOC | 
+      TSK_FS_BLOCK_FLAG_META | 
+      TSK_FS_BLOCK_FLAG_CONT;
+}
+
+static uint8_t
+reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
+    TSK_INUM_T end_inum, TSK_FS_META_FLAG_ENUM flags,
+    TSK_FS_META_WALK_CB a_action, void *ptr)
+{
+  return 0;
+  /*
+    // TODO(wb): old implementation of blk_walk. Adapt here
+
     REGFS_INFO *reg = (REGFS_INFO *) fs;
     REGFS_CELL cell;
 
@@ -170,7 +282,7 @@ reg_block_walk(TSK_FS_INFO * fs,
 		  PRIuDADDR "\n", a_start_blk, a_end_blk);
     }
 
-    /* Sanity check on a_flags -- make sure at least one ALLOC is set */
+    // Sanity check on a_flags -- make sure at least one ALLOC is set 
     if (((a_flags & TSK_FS_BLOCK_WALK_FLAG_ALLOC) == 0) &&
         ((a_flags & TSK_FS_BLOCK_WALK_FLAG_UNALLOC) == 0)) {
         a_flags |=
@@ -250,21 +362,7 @@ reg_block_walk(TSK_FS_INFO * fs,
 
     tsk_fs_block_free(fs_block);
     return 0;
-}
-
-reg_block_getflags(TSK_FS_INFO * fs, TSK_DADDR_T a_addr)
-{
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    return 0;
-}
-
-static uint8_t
-reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
-    TSK_INUM_T end_inum, TSK_FS_META_FLAG_ENUM flags,
-    TSK_FS_META_WALK_CB a_action, void *ptr)
-{
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    return 0;
+*/
 }
 
 static TSK_FS_ATTR_TYPE_ENUM
@@ -310,7 +408,7 @@ TSK_RETVAL_ENUM
 reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
-    REGFS_INFO *ntfs = (REGFS_INFO *) fs;
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
     return 0;
 }
 
@@ -485,7 +583,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 	return TSK_ERR;
     }
 
-    strncpy(s, nk->name, name_length);
+    strncpy(s, (char *)nk->name, name_length);
     tsk_fprintf(hFile, "Key Name: %s\n", s);
 
     if ((tsk_getu16(fs->endian, nk->is_root)) == 0x2C) {
@@ -494,6 +592,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       tsk_fprintf(hFile, "Root Record: %s\n", "No");
     }
 
+    /* TODO(wb): Once we have to fs_meta down...
     if (sec_skew != 0) {
         tsk_fprintf(hFile, "\nAdjusted Entry Times:\n");
 
@@ -513,7 +612,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     }
     tsk_fprintf(hFile, "Modified:\t%s\n", tsk_fs_time_to_str(fs_meta->mtime,
             timeBuf));
-
+    */
 
     tsk_fprintf(hFile, "Parent Record: %" PRIuINUM "\n", 
 		FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
@@ -757,6 +856,11 @@ reg_jopen(TSK_FS_INFO * fs, TSK_INUM_T inum)
 }
 
 
+static uint8_t
+reg_file_get_sidstr(TSK_FS_FILE * a_fs_file, char **sid_str)
+{
+  return 1;
+}
 
 
 
@@ -851,9 +955,11 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
     // TODO(wb): set root inode
     // TODO(wb): set num inodes
-    fs->first_block = FIRST_HBIN_OFFSET + 0x20;
-    fs->last_block = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
-    fs->last_block_act = img_info->size - HBIN_SIZE;
+    fs->block_size = HBIN_SIZE;
+    fs->first_block = 0;
+    // TODO(wb): from where is this offset relative?
+    fs->last_block = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)); 
+    fs->last_block_act = (img_info->size - (img_info->size % HBIN_SIZE)) / HBIN_SIZE;
 
     fs->inode_walk = reg_inode_walk;
     fs->block_walk = reg_block_walk;
