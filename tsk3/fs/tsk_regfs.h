@@ -23,7 +23,9 @@
  *     just a buffer which an initial 4 byte length field. Records typically
  *     fit within one Cell; however, this is not guaranteed for large values.
  *   Offsets within the Registry point to the start of a Cell.
- *   We'll consider an Inode a Cell that contains a Record. 
+ *   Block numbers are multiples of 4096, since the size of an HBIN is 4096.
+ *   Consider an Inode a Cell that contains a Record. 
+ *   Inode numbers are the absolute offset in bytes of the start of a cell.
  *   Use `tsk_malloc` over `malloc`. It zeros memory, too.
  *   Use `tsk_remalloc` over `remalloc`.
  *   Use `free` as usual.
@@ -31,57 +33,57 @@
  *     the errno, unless you're changing it. 
  * 
  *   Functions, and their uses:
- *     fs->open
+ *     [x] fs->open
  *       Allocates a REGFS_INFO structure on the heap.
  *       Sets the appropriate function pointers.
  *       Sets basic file system metadata in the REGFS_INFO structure.
- *     fs->close
+ *     [x] fs->close
  *       Frees a REGFS_INFO structure.
- *     fs->block_walk
+ *     [x] fs->block_walk
  *       Iterates through each HBIN, and calls a callback function 
  *       with the TSK_FS_BLOCK pointer for the HBIN. Only HBIN whose
  *       attributes match a set of filter flags are passed to the 
  *       callback.  Flags include ALLOC'd and UNALLOC'd.  But only ALLOC
  *       really makes any sense when we are talking about HBINs.
- *     fs->block_getflags
+ *     [x] fs->block_getflags
  *       Get the flags associated with a particular Cell.
  *       Flags include ALLOC'd and UNALLOC'd.
- *     fs->inode_walk
+ *     [ ] fs->inode_walk
  *       Iterates through each Record, and calls a callback function 
  *       with the TSK_FS_FILE pointer for the Record. Only Records whose
  *       attributes match a set of filter flags are passed to the 
  *       callback.  Flags include ALLOC'd and UNALLOC'd.
- *     fs->istat
+ *     [-2] fs->istat
  *       Use tsk_fs_file_open_meta to acquire a TSK_FS_FILE pointer
  *       for the requested Record.  Then, print out relevant data.
- *     fs->file_add_meta
+ *     [1] fs->file_add_meta
  *       Given a TSK_FS_FILE, allocate memory (if necessary) for the
  *       metadata stored in TSK_FS_META substructure using 
  *       tsk_fs_meta_alloc.  This structure may also be reset by 
  *       tsk_fs_meta_reset.  Then, set relevant metadata for the
  *       TSK_FS_META substructure.
- *     fs->get_default_attr_type
+ *     [ ] fs->get_default_attr_type
  *       Given a TSK_FS_FILE, return the default attribute type.
  *       This is probably TSK_FS_ATTR_TYPE_DEFAULT.
- *     fs->load_attrs
+ *     [ ] fs->load_attrs
  *       Load data locations for a Record into runs.  This is how TSK will 
  *       access the data for a Record if you request it.
- *     fs->dir_open_meta
+ *     [ ] fs->dir_open_meta
  *       Allocate (with tsk_fs_dir_alloc) or reset a TSK_FS_DIR structure,
  *       set the TSK_FS_FILE substructure, and add the names of entries
  *       in the directory as TSK_FS_NAME structures (which have inode
  *       numbers).
- *     fs->name_cmp
+ *     [x] fs->name_cmp
  *       Compare two key names or value names case insensitively.
- *     fs->fsstat
+ *     [-] fs->fsstat
  *       Print relevant information about the Registry file.
- *     fs->fscheck
+ *     [x] fs->fscheck
  *       Unsupported.
- *     fs->jblk_walk
+ *     [x] fs->jblk_walk
  *       There is no journal in the Registry. Unsupported.
- *     fs->jentry_walk
+ *     [x] fs->jentry_walk
  *       There is no journal in the Registry. Unsupported.
- *     fs->jopen
+ *     [x] fs->jopen
  *       There is no journal in the Registry. Unsupported.
  */
 

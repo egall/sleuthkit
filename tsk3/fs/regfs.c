@@ -57,7 +57,7 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   ssize_t count;
   uint32_t len;
   uint16_t type;
-  uint8_t  buf[4];
+  uint8_t  buf[6];
 
   if (inum < fs->first_block || inum > fs->last_block) {
     tsk_error_reset();
@@ -68,8 +68,8 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
 
   cell->inum = inum;
 
-  count = tsk_fs_read(fs, inum, (char *)buf, 4);
-  if (count != 4) {
+  count = tsk_fs_read(fs, inum, (char *)buf, 6);
+  if (count != 6) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_READ);
     tsk_error_set_errstr("Failed to read cell structure");
@@ -88,18 +88,11 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
     tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
-			 cell->length);
+			 (unsigned long)cell->length);
     return TSK_ERR;
   }
 
-  count = tsk_fs_read(fs, inum + 4, (char *)buf, 2);
-  if (count != 2) {
-    tsk_error_reset();
-    tsk_error_set_errno(TSK_ERR_FS_READ);
-    tsk_error_set_errstr("Failed to read cell structure");
-    return TSK_ERR;
-  }
-  type = (tsk_getu16(fs->endian, buf));
+  type = (tsk_getu16(fs->endian, buf + 4));
 
   switch (type) {
   case 0x6b76:
@@ -133,6 +126,68 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   
   return TSK_OK;
 }
+
+/**
+ * reg_file_add_meta
+ * Load the associated metadata for the file with inode at `inum`
+ * into the file structure `a_fs_file`.
+ *
+ * @return 1 on error, 0 otherwise.
+ */
+uint8_t
+reg_file_add_meta(TSK_FS_INFO * a_fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
+    REGFS_INFO *fs = (REGFS_INFO *) a_fs;
+    TSK_RETVAL_ENUM retval;
+    REGFS_CELL cell;
+    ssize_t count;
+
+    tsk_error_reset();
+
+    if (inum < fs->first_inum || inum > fs->last_inum) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("regfs_file_add_meta: %" PRIuINUM " too large/small", 
+			     inum);
+        return 1;
+    }
+    if (a_fs_file == NULL) {
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("regfs_inode_lookup: fs_file is NULL");
+        return 1;
+    }
+
+    if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
+        return 1;
+    }
+
+    if (a_fs_file->meta != NULL) {
+        tsk_fs_meta_close(a_fs_file->fs_meta);
+    }
+
+    // for the time being, stuff the entire Record into the 
+    // meta content field. On average, it won't be very big.
+    // And it shouldn't ever be larger than 4096 bytes.
+    if ((a_fs_file->meta = tsk_fs_meta_alloc(cell.length)) == NULL) {
+        return 1;
+    }
+
+    count = tsk_fs_read(fs, inum, (char *)(a_fs_file->fs_meta->content_ptr), 
+			cell.length);
+    if (count != cell.length) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_READ);
+      tsk_error_set_errstr("Failed to read cell structure");
+      return TSK_ERR;
+    }
+
+    // TODO(wb): resume here.
+    if (fatfs_dinode_load(fs, &dep, inum)) {
+        return 1;
+    }
+
+    return 0;
+}
+
 
 
 /**
@@ -202,7 +257,7 @@ reg_block_walk(TSK_FS_INFO * fs,
 		    blknum, blknum * 4096, HBIN_SIZE);
       }
 
-      count = tsk_fs_read_block(fs, blknum, data_buf, HBIN_SIZE);
+      count = tsk_fs_read_block(fs, blknum, (char *)data_buf, HBIN_SIZE);
       if (count != HBIN_SIZE) {
 	tsk_fs_block_free(fs_block);
 	return 1;
@@ -213,7 +268,7 @@ reg_block_walk(TSK_FS_INFO * fs,
 			   TSK_FS_BLOCK_FLAG_META | 
 			   TSK_FS_BLOCK_FLAG_CONT | 
 			   TSK_FS_BLOCK_FLAG_RAW,
-			   data_buf) != 0) {
+			   (char *)data_buf) != 0) {
 	tsk_fs_block_free(fs_block);
 	return 1;
       }
@@ -378,7 +433,7 @@ reg_get_default_attr_type(const TSK_FS_FILE * a_file)
         return TSK_FS_ATTR_TYPE_NTFS_DATA;
 }
 
-/** \internal
+/** 
  * Load the attributes.
  * @param a_fs_file File to load attributes for.
  * @returns 1 on error
@@ -389,26 +444,11 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     return 0;
 }
 
-/**
- * Read an MFT entry and save it in the generic TSK_FS_META format.
- *
- * @param fs File system to read from.
- * @param mftnum Address of mft entry to read
- * @returns 1 on error
- */
-static uint8_t
-reg_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
-    TSK_INUM_T mftnum)
-{
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    return 0;
-}
-
 TSK_RETVAL_ENUM
 reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     return 0;
 }
 
@@ -493,7 +533,7 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
 static TSK_RETVAL_ENUM
 reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "VK");
@@ -504,7 +544,7 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     ssize_t count;
     uint8_t buf[HBIN_SIZE];
     REGFS_CELL_NK *nk;
@@ -623,7 +663,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "LF");
@@ -633,7 +673,7 @@ reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "LH");
@@ -643,7 +683,7 @@ reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "LI");
@@ -653,7 +693,7 @@ reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "RI");
@@ -663,7 +703,7 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "SK");
@@ -673,7 +713,7 @@ reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "DB");
@@ -683,7 +723,7 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     ssize_t count;
     uint8_t buf[HBIN_SIZE];
 
@@ -728,7 +768,7 @@ static uint8_t
 reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     TSK_INUM_T inum, TSK_DADDR_T numblock, int32_t sec_skew)
 {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     REGFS_CELL cell;
 
     tsk_fprintf(hFile, "\nCELL INFORMATION\n");
@@ -784,7 +824,7 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
 static void
 reg_close(TSK_FS_INFO * fs)
 {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
 
     if (fs == NULL)
         return;
@@ -968,7 +1008,7 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->get_default_attr_type = reg_get_default_attr_type;
     fs->load_attrs = reg_load_attrs;
 
-    fs->file_add_meta = reg_inode_lookup;
+    fs->file_add_meta = reg_file_add_meta;
     fs->dir_open_meta = reg_dir_open_meta;
     fs->fsstat = reg_fsstat;
     fs->fscheck = reg_fscheck;
