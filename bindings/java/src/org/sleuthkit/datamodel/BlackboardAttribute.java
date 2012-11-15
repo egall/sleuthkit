@@ -1,7 +1,7 @@
 /*
  * Sleuth Kit Data Model
  *
- * Copyright 2011 Basis Technology Corp.
+ * Copyright 2012 Basis Technology Corp.
  * Contact: carrier <at> sleuthkit <dot> org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -165,6 +165,8 @@ public class BlackboardAttribute {
 		TSK_URL_DECODED(67, "TSK_URL_DECODED", "Decoded URL"),
 		TSK_DATETIME_CREATED(68, "TSK_DATETIME_CREATED", "Date Created"),
 		TSK_DATETIME_MODIFIED(69, "TSK_DATETIME_MODIFIED", "Date Modified"),
+		TSK_PROCESSOR_ARCHITECTURE(70, "TSK_PROCESSOR_ARCHITECTURE", "Processor Architecture"),
+		TSK_VERSION(71, "TSK_VERSION", "Version"),
 		;
 		
 		
@@ -277,7 +279,7 @@ public class BlackboardAttribute {
 	 * @param moduleName name of the module that is creating the attribute
 	 * @param context extra information about the attribute
 	 * @param valueInt the value
-	 * @deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
+	 * @Deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
 	 * use the alternative constructor without context
 	 */
 	public BlackboardAttribute(int attributeTypeID, String moduleName, String context,
@@ -315,7 +317,7 @@ public class BlackboardAttribute {
 	 * @param moduleName name of the module that is creating the attribute
 	 * @param context extra information about the attribute
 	 * @param valueLong the value
-	 * @deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
+	 * @Deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
 	 * use the alternative constructor without context
 	 */
 	public BlackboardAttribute(int attributeTypeID, String moduleName, String context,
@@ -353,7 +355,7 @@ public class BlackboardAttribute {
 	 * @param moduleName name of the module that is creating the attribute
 	 * @param context extra information about the attribute
 	 * @param valueDouble the value
-	 * @deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
+	 * @Deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
 	 * use the alternative constructor without context
 	 */
 	public BlackboardAttribute(int attributeTypeID, String moduleName, String context,
@@ -389,7 +391,7 @@ public class BlackboardAttribute {
 	 * @param moduleName name of the module that is creating the attribute
 	 * @param context extra information about the attribute
 	 * @param valueString the value
-	 * @deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
+	 * @Deprecated context parameter will be deprecated - in lieu of specific blackboard attributes
 	 * use the alternative constructor without context
 	 */
 	public BlackboardAttribute(int attributeTypeID, String moduleName, String context,

@@ -193,6 +193,33 @@ int
         return 1;
     }
 
+	// allow to read while in transaction
+    if (attempt_exec("PRAGMA read_uncommitted = True;",
+            "Error setting PRAGMA read_uncommitted: %s\n")) {
+        return 1;
+    }
+
+    // set UTF8 encoding
+    if (attempt_exec("PRAGMA encoding = \"UTF-8\";",
+            "Error setting PRAGMA encoding UTF-8: %s\n")) {
+        return 1;
+    }
+
+    // set page size
+    if (attempt_exec("PRAGMA page_size = 4096;",
+            "Error setting PRAGMA page_size: %s\n")) {
+        return 1;
+    }
+
+    // increase the DB by 1MB at a time. 
+    int chunkSize = 1024 * 1024;
+    if (sqlite3_file_control(m_db, NULL, SQLITE_FCNTL_CHUNK_SIZE, &chunkSize) != SQLITE_OK) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_AUTO_DB);
+        tsk_error_set_errstr("TskDbSqlite::initialze: error setting chunk size %s", sqlite3_errmsg(m_db));
+        return 1;
+    }
+
     if (attempt_exec
         ("CREATE TABLE tsk_db_info (schema_ver INTEGER, tsk_ver INTEGER);",
             "Error creating tsk_db_info table: %s\n")) {
@@ -541,10 +568,10 @@ int
  * @param objId object id of this directory from the objects table
  */
 void TskDbSqlite::storeObjId(const int64_t & fsObjId, const TSK_INUM_T & meta_addr, const int64_t & objId) {
-    map<TSK_INUM_T,int64_t>::iterator it = m_parentDirIdCache[fsObjId].find(meta_addr);
-    if (it == m_parentDirIdCache[fsObjId].end() )
-        //store only if does not exist
-        m_parentDirIdCache[fsObjId][meta_addr] = objId;
+	map<TSK_INUM_T,int64_t> &tmpMap = m_parentDirIdCache[fsObjId];
+	//store only if does not exist
+	if (tmpMap.count(meta_addr) == 0)
+		tmpMap[meta_addr] = objId;
 }
 
 /**
@@ -554,17 +581,11 @@ void TskDbSqlite::storeObjId(const int64_t & fsObjId, const TSK_INUM_T & meta_ad
  * @returns parent obj id ( > 0), -1 on error
  */
 int64_t TskDbSqlite::findParObjId(const TSK_FS_FILE * fs_file, const int64_t & fsObjId) {
-    int64_t parObjId = -1;
-
-    //get from cache by parent meta addr, if available
-    map<TSK_INUM_T,int64_t>::iterator it = m_parentDirIdCache[fsObjId].find(fs_file->name->par_addr);
-    if (it != m_parentDirIdCache[fsObjId].end() ) {
-        parObjId = it->second;
-    }
-    
-    if (parObjId > 0)
-        //return cached
-        return parObjId;
+	//get from cache by parent meta addr, if available
+	map<TSK_INUM_T,int64_t> &tmpMap = m_parentDirIdCache[fsObjId];
+	if (tmpMap.count(fs_file->name->par_addr) > 0) {
+		return tmpMap[fs_file->name->par_addr];
+	}
 
     // Find the parent file id in the database using the parent metadata address
     if (attempt(sqlite3_bind_int64(m_selectFilePreparedStmt, 1, fs_file->name->par_addr),
@@ -579,7 +600,7 @@ int64_t TskDbSqlite::findParObjId(const TSK_FS_FILE * fs_file, const int64_t & f
         return -1;
     }
 
-    parObjId = sqlite3_column_int64(m_selectFilePreparedStmt, 0);
+    int64_t parObjId = sqlite3_column_int64(m_selectFilePreparedStmt, 0);
 
     if (attempt(sqlite3_reset(m_selectFilePreparedStmt),
         "Error resetting 'select file id by meta_addr' statement: %s\n")) {
@@ -605,13 +626,13 @@ int
 
     char
      foo[4096];
-    int
+    time_t
      mtime = 0;
-    int
+    time_t
      crtime = 0;
-    int
+    time_t
      ctime = 0;
-    int
+    time_t
      atime = 0;
     TSK_OFF_T size = 0;
     int
@@ -625,7 +646,7 @@ int
     int
      uid = 0;
     int
-     type = 0;
+     type = TSK_FS_ATTR_TYPE_NOT_FOUND;
     int
      idx = 0;
 
@@ -637,7 +658,6 @@ int
         atime = fs_file->meta->atime;
         ctime = fs_file->meta->ctime;
         crtime = fs_file->meta->crtime;
-        size = fs_file->meta->size;
         meta_type = fs_file->meta->type;
         meta_flags = fs_file->meta->flags;
         meta_mode = fs_file->meta->mode;
@@ -649,6 +669,7 @@ int
     if (fs_attr) {
         type = fs_attr->type;
         idx = fs_attr->id;
+        size = fs_attr->size;
         if (fs_attr->name) {
             if ((fs_attr->type != TSK_FS_ATTR_TYPE_NTFS_IDXROOT) ||
                 (strcmp(fs_attr->name, "$I30") != 0)) {
@@ -748,7 +769,7 @@ int
         "%" PRIuINUM ","
         "%d,%d,%d,%d,"
         "%" PRIuOFF ","
-        "%d,%d,%d,%d,%d,%d,%d,%s,%d,"
+        "%lld,%lld,%lld,%lld,%d,%d,%d,%s,%d,"
         "'%s')",
         fsObjId, objId,
         TSK_DB_FILES_TYPE_FS,
