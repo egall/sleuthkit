@@ -15,6 +15,27 @@
 #include "tsk_fs_i.h"
 #include "tsk_regfs.h"
 
+/**
+ * @see ntfs.c
+ */
+static uint32_t
+nt2unixtime(uint64_t ntdate) {
+  #define NSEC_BTWN_1601_1970 (uint64_t)(116444736000000000ULL)
+  
+  ntdate -= (uint64_t) NSEC_BTWN_1601_1970;
+  ntdate /= (uint64_t) 10000000;
+  return (uint32_t) ntdate;
+}
+
+/**
+ * @see ntfs.c
+ */
+static uint32_t
+nt2nano(uint64_t ntdate) {
+  return (int32_t) (ntdate % 10000000);
+}
+
+
 static TSK_RETVAL_ENUM
 regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
 	       uint8_t *utf16, ssize_t utf16_length,
@@ -131,12 +152,109 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
  * reg_file_add_meta
  * Load the associated metadata for the file with inode at `inum`
  * into the file structure `a_fs_file`.
+ * If the `meta` field of `a_fs_file` is already set, it will be
+ *   cleared and reset.
+ * As for the `meta.type`:
+ *   - vk records --> file
+ *   - nk records --> directories
+ *   - else       --> virtual files
+ * Until we do some parsing of security info, the mode
+ *   is 0777 for all keys and values.
  *
+ * 
  * @return 1 on error, 0 otherwise.
+
+    struct TSK_FS_FILE {
+        int tag;                ///< \internal Will be set to TSK_FS_FILE_TAG 
+	                              if structure is allocated
+        TSK_FS_NAME *name;      ///< Pointer to name of file (or NULL 
+	                              if file was opened using metadata address)
+        TSK_FS_META *meta;      ///< Pointer to metadata of file (or NULL 
+	                              if name has invalid metadata address)
+        TSK_FS_INFO *fs_info;   ///< Pointer to file system that the file 
+	                              is located in.
+    };
+    
+    ^^ this is done, now just need to set the `meta` field
+
+
+    typedef struct {
+[x]        int tag;                ///< \internal Will be set to TSK_FS_META_TAG 
+	                                         if structure is allocated
+[x]        TSK_FS_META_FLAG_ENUM flags;    ///< Flags for this file for its 
+	                                        allocation status etc.
+[x]        TSK_INUM_T addr;        ///< Address of the meta data structure 
+	                                        for this file
+[x]        TSK_FS_META_TYPE_ENUM type;     ///< File type
+[x]        TSK_FS_META_MODE_ENUM mode;     ///< Unix-style permissions
+[x]        int nlink;              ///< link count (number of file names 
+	                                pointing to this)
+[x]        TSK_OFF_T size;         ///< file size (in bytes)
+[x]        TSK_UID_T uid;          ///< owner id
+[x]        TSK_GID_T gid;          ///< group id
+[x]        time_t mtime;           ///< last file content modification 
+	                                time (stored in number of seconds 
+					since Jan 1, 1970 UTC)
+[x]        uint32_t mtime_nano;    ///< nano-second resolution in addition 
+                                        to m_time
+[x]        time_t atime;           ///< last file content accessed time 
+	                                (stored in number of seconds 
+					since Jan 1, 1970 UTC)
+[x]        uint32_t atime_nano;    ///< nano-second resolution in addition 
+                                        to a_time
+[x]        time_t ctime;           ///< last file / metadata status change time 
+	                                (stored in number of seconds 
+					since Jan 1, 1970 UTC)
+[x]        uint32_t ctime_nano;    ///< nano-second resolution in addition 
+                                        to c_time
+[x]        time_t crtime;          ///< Created time (stored in number of 
+	                                seconds since Jan 1, 1970 UTC)
+[x]        uint32_t crtime_nano;   ///< nano-second resolution in addition 
+                                        to cr_time
+        / filesystem specific times /
+        union {
+            struct {
+[x]                time_t dtime;   ///< Linux deletion time
+[x]                uint32_t dtime_nano;    ///< nano-second resolution in 
+		                               addition to d_time
+            } ext2;
+            struct {
+[x]                time_t bkup_time;       ///< HFS+ backup time
+[x]                uint32_t bkup_time_nano;        ///< nano-second resolution 
+		                                     in addition to bkup_time
+            } hfs;
+        } time2;
+
+[x]        void *content_ptr;      ///< Pointer to file system specific data 
+	                               that is used to store references 
+				       to file content
+[x]        size_t content_len;     ///< size of content  buffer
+[x]        uint32_t seq;           ///< Sequence number for file 
+	                               (NTFS only, is incremented when 
+				       entry is reallocated) 
+        / Contains run data on the file content 
+	    (specific locations where content is stored).  
+        * Check attr_state to determine if data in here 
+	    is valid because not all file systems 
+        * load this data when a file is loaded.  
+	    It may not be loaded until needed by one
+        * of the APIs. Most file systems will have only 
+	    one attribute, but NTFS will have several. /
+[ ]        TSK_FS_ATTRLIST *attr;
+[ ]        TSK_FS_META_ATTR_FLAG_ENUM attr_state;  ///< State of the data in 
+	                                               the TSK_FS_META::attr 
+						       structure
+[x]        TSK_FS_META_NAME_LIST *name2;   ///< Name of file stored in 
+	                                       metadata (FAT and NTFS Only)
+[x]        char *link;             ///< Name of target file if this is 
+	                                a symbolic link
+    } TSK_FS_META;
+
+
  */
 uint8_t
-reg_file_add_meta(TSK_FS_INFO * a_fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
-    REGFS_INFO *fs = (REGFS_INFO *) a_fs;
+reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
+    REGFS_INFO *reg = (REGFS_INFO *) fs;
     TSK_RETVAL_ENUM retval;
     REGFS_CELL cell;
     ssize_t count;
@@ -156,22 +274,84 @@ reg_file_add_meta(TSK_FS_INFO * a_fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) 
         return 1;
     }
 
+    if (fs == NULL) {
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("regfs_inode_lookup: fs is NULL");
+        return 1;
+    }
+    a_fs_file->fs_info = fs;
+
     if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
         return 1;
     }
 
+    // we will always reset the meta field
+    // because this is simple.
     if (a_fs_file->meta != NULL) {
-        tsk_fs_meta_close(a_fs_file->fs_meta);
+        tsk_fs_meta_close(a_fs_file->meta);
     }
 
     // for the time being, stuff the entire Record into the 
     // meta content field. On average, it won't be very big.
     // And it shouldn't ever be larger than 4096 bytes.
+    if (cell.length > HBIN_SIZE) {
+        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+        tsk_error_set_errstr("regfs_inode_lookup: cell too large");
+        return 1;
+    }
     if ((a_fs_file->meta = tsk_fs_meta_alloc(cell.length)) == NULL) {
         return 1;
     }
 
-    count = tsk_fs_read(fs, inum, (char *)(a_fs_file->fs_meta->content_ptr), 
+    a_fs_file->meta->addr = inum;
+    a_fs_file->meta->flags = TSK_FS_META_FLAG_ALLOC;
+    if (cell.type == TSK_REGFS_RECORD_TYPE_VK) {
+      a_fs_file->meta->type = TSK_FS_META_TYPE_REG;
+    }
+    else if (cell.type == TSK_REGFS_RECORD_TYPE_NK) {
+      a_fs_file->meta->type = TSK_FS_META_TYPE_DIR;
+    }
+    else {
+      a_fs_file->meta->type = TSK_FS_META_TYPE_VIRT;
+    }
+    a_fs_file->meta->mode = 0007777;
+    a_fs_file->meta->nlink = 1;
+
+    // TODO(wb): parse the size of vk record data
+    a_fs_file->meta->size = cell.length;
+
+    // TODO(wb): parse security info
+    a_fs_file->meta->uid = 0;
+    a_fs_file->meta->gid = 0;
+
+    if (cell.type == TSK_REGFS_RECORD_TYPE_NK) {
+      REGFS_CELL_NK *nk = (REGFS_CELL_NK *)&cell;
+      uint64_t nttime = tsk_getu64(fs->endian, nk->timestamp);
+      a_fs_file->meta->mtime = nt2unixtime(nttime);
+      a_fs_file->meta->mtime_nano = nt2nano(nttime);
+    }
+    else {
+      a_fs_file->meta->mtime = 0;
+      a_fs_file->meta->mtime_nano = 0;
+    }
+
+    // The Registry does not have an Access timestamp
+    a_fs_file->meta->atime = 0;
+    a_fs_file->meta->atime_nano = 0;
+
+    // The Registry does not have a Changed timestamp
+    a_fs_file->meta->ctime = 0;
+    a_fs_file->meta->ctime_nano = 0;
+
+    // The Registry does not have a Created timestamp
+    a_fs_file->meta->crtime = 0;
+    a_fs_file->meta->crtime_nano = 0;
+
+    // The Registry does not have a Deleted timestamp
+    a_fs_file->meta->time2.ext2.dtime = 0;
+    a_fs_file->meta->time2.ext2.dtime_nano = 0;
+
+    count = tsk_fs_read(fs, inum, (char *)(a_fs_file->meta->content_ptr), 
 			cell.length);
     if (count != cell.length) {
       tsk_error_reset();
@@ -180,12 +360,11 @@ reg_file_add_meta(TSK_FS_INFO * a_fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) 
       return TSK_ERR;
     }
 
-    // TODO(wb): resume here.
-    if (fatfs_dinode_load(fs, &dep, inum)) {
-        return 1;
-    }
+    a_fs_file->meta->seq = 0;
 
-    return 0;
+    a_fs_file->meta->link = "";
+
+    return TSK_OK;
 }
 
 
