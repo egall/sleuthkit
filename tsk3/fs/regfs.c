@@ -148,6 +148,17 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   return TSK_OK;
 }
 
+/** 
+ * Load the attributes.
+ * @param a_fs_file File to load attributes for.
+ * @returns 1 on error
+ */
+static uint8_t
+reg_load_attrs(TSK_FS_FILE * a_fs_file)
+{
+    return 0;
+}
+
 /**
  * reg_file_add_meta
  * Load the associated metadata for the file with inode at `inum`
@@ -166,8 +177,6 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
  */
 uint8_t
 reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
-    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    TSK_RETVAL_ENUM retval;
     REGFS_CELL cell;
     ssize_t count;
 
@@ -280,7 +289,7 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
       return TSK_ERR;
     }
     // TODO(wb): should this be set by reg_load_attrs?
-    a_fs_file->meta->state = TSK_FS_META_ATTR_STUDIED;
+    a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
 
     return TSK_OK;
 }
@@ -530,16 +539,6 @@ reg_get_default_attr_type(const TSK_FS_FILE * a_file)
         return TSK_FS_ATTR_TYPE_NTFS_DATA;
 }
 
-/** 
- * Load the attributes.
- * @param a_fs_file File to load attributes for.
- * @returns 1 on error
- */
-static uint8_t
-reg_load_attrs(TSK_FS_FILE * a_fs_file)
-{
-    return 0;
-}
 
 TSK_RETVAL_ENUM
 reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir,
