@@ -163,94 +163,6 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
  *
  * 
  * @return 1 on error, 0 otherwise.
-
-    struct TSK_FS_FILE {
-        int tag;                ///< \internal Will be set to TSK_FS_FILE_TAG 
-	                              if structure is allocated
-        TSK_FS_NAME *name;      ///< Pointer to name of file (or NULL 
-	                              if file was opened using metadata address)
-        TSK_FS_META *meta;      ///< Pointer to metadata of file (or NULL 
-	                              if name has invalid metadata address)
-        TSK_FS_INFO *fs_info;   ///< Pointer to file system that the file 
-	                              is located in.
-    };
-    
-    ^^ this is done, now just need to set the `meta` field
-
-
-    typedef struct {
-[x]        int tag;                ///< \internal Will be set to TSK_FS_META_TAG 
-	                                         if structure is allocated
-[x]        TSK_FS_META_FLAG_ENUM flags;    ///< Flags for this file for its 
-	                                        allocation status etc.
-[x]        TSK_INUM_T addr;        ///< Address of the meta data structure 
-	                                        for this file
-[x]        TSK_FS_META_TYPE_ENUM type;     ///< File type
-[x]        TSK_FS_META_MODE_ENUM mode;     ///< Unix-style permissions
-[x]        int nlink;              ///< link count (number of file names 
-	                                pointing to this)
-[x]        TSK_OFF_T size;         ///< file size (in bytes)
-[x]        TSK_UID_T uid;          ///< owner id
-[x]        TSK_GID_T gid;          ///< group id
-[x]        time_t mtime;           ///< last file content modification 
-	                                time (stored in number of seconds 
-					since Jan 1, 1970 UTC)
-[x]        uint32_t mtime_nano;    ///< nano-second resolution in addition 
-                                        to m_time
-[x]        time_t atime;           ///< last file content accessed time 
-	                                (stored in number of seconds 
-					since Jan 1, 1970 UTC)
-[x]        uint32_t atime_nano;    ///< nano-second resolution in addition 
-                                        to a_time
-[x]        time_t ctime;           ///< last file / metadata status change time 
-	                                (stored in number of seconds 
-					since Jan 1, 1970 UTC)
-[x]        uint32_t ctime_nano;    ///< nano-second resolution in addition 
-                                        to c_time
-[x]        time_t crtime;          ///< Created time (stored in number of 
-	                                seconds since Jan 1, 1970 UTC)
-[x]        uint32_t crtime_nano;   ///< nano-second resolution in addition 
-                                        to cr_time
-        / filesystem specific times /
-        union {
-            struct {
-[x]                time_t dtime;   ///< Linux deletion time
-[x]                uint32_t dtime_nano;    ///< nano-second resolution in 
-		                               addition to d_time
-            } ext2;
-            struct {
-[x]                time_t bkup_time;       ///< HFS+ backup time
-[x]                uint32_t bkup_time_nano;        ///< nano-second resolution 
-		                                     in addition to bkup_time
-            } hfs;
-        } time2;
-
-[x]        void *content_ptr;      ///< Pointer to file system specific data 
-	                               that is used to store references 
-				       to file content
-[x]        size_t content_len;     ///< size of content  buffer
-[x]        uint32_t seq;           ///< Sequence number for file 
-	                               (NTFS only, is incremented when 
-				       entry is reallocated) 
-        / Contains run data on the file content 
-	    (specific locations where content is stored).  
-        * Check attr_state to determine if data in here 
-	    is valid because not all file systems 
-        * load this data when a file is loaded.  
-	    It may not be loaded until needed by one
-        * of the APIs. Most file systems will have only 
-	    one attribute, but NTFS will have several. /
-[ ]        TSK_FS_ATTRLIST *attr;
-[ ]        TSK_FS_META_ATTR_FLAG_ENUM attr_state;  ///< State of the data in 
-	                                               the TSK_FS_META::attr 
-						       structure
-[x]        TSK_FS_META_NAME_LIST *name2;   ///< Name of file stored in 
-	                                       metadata (FAT and NTFS Only)
-[x]        char *link;             ///< Name of target file if this is 
-	                                a symbolic link
-    } TSK_FS_META;
-
-
  */
 uint8_t
 reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
@@ -363,6 +275,12 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->seq = 0;
 
     a_fs_file->meta->link = "";
+
+    if (reg_load_attrs(a_fs_file) == 1) {
+      return TSK_ERR;
+    }
+    // TODO(wb): should this be set by reg_load_attrs?
+    a_fs_file->meta->state = TSK_FS_META_ATTR_STUDIED;
 
     return TSK_OK;
 }
