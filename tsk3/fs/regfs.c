@@ -653,8 +653,9 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
 
 static TSK_RETVAL_ENUM
 reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "VK");
@@ -664,21 +665,15 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     ssize_t count;
-	//	REGFS_CELL *cell;
+    REGFS_CELL *cell;
     REGFS_CELL_NK *nk;
     char s[512]; // to be used throughout, temporarily
     uint16_t name_length;
-    TSK_FS_FILE *the_file;
     char timeBuf[128];
 
-    the_file = tsk_fs_file_open_meta(fs, NULL, cell->inum);
-    if (the_file == NULL) {
-      return TSK_ERR;
-    }
 	cell = (REGFS_CELL *)the_file->meta->content_ptr;
-	printf("length: 0x%x\n", cell->length);
 	nk = (REGFS_CELL_NK *)&cell->data;
 
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
@@ -696,7 +691,6 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       classname_length = (tsk_gets16(fs->endian, nk->classname_length));
 
       if (classname_length > 512) {
-		tsk_fs_file_close(the_file);
 		tsk_error_reset();
 		tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
 		tsk_error_set_errstr("NK classname string too long");
@@ -706,7 +700,6 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       count = tsk_fs_read(fs, FIRST_HBIN_OFFSET + classname_offset + 4, 
 						  s, classname_length);
       if (count != classname_length) {
-		tsk_fs_file_close(the_file);
 		tsk_error_reset();
 		tsk_error_set_errno(TSK_ERR_FS_READ);
 		tsk_error_set_errstr("Failed to read NK classname string");
@@ -715,7 +708,6 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 	  
       if (regfs_utf16to8(fs->endian, "NK class name", (uint8_t *)s, 
 						 512, asc, 512) != TSK_OK) {
-		tsk_fs_file_close(the_file);
 		tsk_error_reset();
 		tsk_error_set_errno(TSK_ERR_FS_UNICODE);
 		tsk_error_set_errstr("Failed to convert NK classname string to UTF-8");
@@ -727,7 +719,6 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 
     name_length = (tsk_getu16(fs->endian, nk->name_length));
     if (name_length > 512) {
-	  tsk_fs_file_close(the_file);
 	  tsk_error_reset();
 	  tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
 	  tsk_error_set_errstr("NK key name string too long");
@@ -773,14 +764,15 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 				  FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
     }
 
-	tsk_fs_file_close(the_file);
     return TSK_OK;
 }
 
 static TSK_RETVAL_ENUM
 reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "LF");
@@ -789,8 +781,10 @@ reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "LH");
@@ -799,8 +793,10 @@ reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "LI");
@@ -809,8 +805,10 @@ reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "RI");
@@ -819,8 +817,10 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "SK");
@@ -829,8 +829,10 @@ reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     tsk_fprintf(hFile, "RECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "DB");
@@ -839,8 +841,10 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
-		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    REGFS_CELL *cell;
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+
     ssize_t count;
     uint8_t buf[HBIN_SIZE];
 	memset(buf, 0, HBIN_SIZE);
@@ -887,17 +891,19 @@ static uint8_t
 reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     TSK_INUM_T inum, TSK_DADDR_T numblock, int32_t sec_skew)
 {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
+  TSK_FS_FILE *the_file;
   REGFS_CELL *cell;
+
 
   tsk_fprintf(hFile, "\nCELL INFORMATION\n");
   tsk_fprintf(hFile, "--------------------------------------------\n");
-  
-  cell = reg_load_cell(fs, inum);
-  if (cell == NULL) {
-    return 1;
-  }
 
+  the_file = tsk_fs_file_open_meta(fs, NULL, inum);
+  if (the_file == NULL) {
+	return 1;
+  }
+  cell = the_file->meta->content_ptr;
+  
   tsk_fprintf(hFile, "Cell: %" PRIuINUM "\n", inum);    
   if (cell->is_allocated) {
     tsk_fprintf(hFile, "Allocated: %s\n", "Yes");    
@@ -906,39 +912,40 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
   }
   tsk_fprintf(hFile, "Cell Size: %" PRIu32 "\n", cell->length);
 
+  // TODO(wb): start passing a file, not cell, into istat_* functions
   switch (cell->type) {
   case TSK_REGFS_RECORD_TYPE_VK:
-    reg_istat_vk(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_vk(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_NK:
-    reg_istat_nk(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_nk(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_LF:
-    reg_istat_lf(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_lf(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_LH:
-    reg_istat_lh(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_lh(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_LI:
-    reg_istat_li(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_li(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_RI:
-    reg_istat_ri(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_ri(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_SK:
-    reg_istat_sk(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_sk(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_DB:
-    reg_istat_db(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_db(fs, hFile, the_file, numblock, sec_skew);
     break;
   case TSK_REGFS_RECORD_TYPE_UNKNOWN:
     // fall through intended
   default:
-    reg_istat_unknown(fs, hFile, cell, numblock, sec_skew);
+    reg_istat_unknown(fs, hFile, the_file, numblock, sec_skew);
     break;
   }
 
-  free(cell);
+  tsk_fs_file_close(the_file);
   return 0;
 }
 
