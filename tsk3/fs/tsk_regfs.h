@@ -53,7 +53,7 @@
  *       with the TSK_FS_FILE pointer for the Record. Only Records whose
  *       attributes match a set of filter flags are passed to the 
  *       callback.  Flags include ALLOC'd and UNALLOC'd.
- *     [-2] fs->istat
+ *     [-] fs->istat
  *       Use tsk_fs_file_open_meta to acquire a TSK_FS_FILE pointer
  *       for the requested Record.  Then, print out relevant data.
  *     [1] fs->file_add_meta
@@ -117,11 +117,13 @@ extern "C" {
   typedef struct REGFS_CELL {
     TSK_INUM_T inum;  ///< Inode number (address) of cell.
     uint8_t  is_allocated; ///< 1 if active, 0 otherwise.
-    uint32_t length; ///< Length of cell, including all headers.
     TSK_REGFS_RECORD_TYPE_ENUM type;  ///< The type of the contents of the cell.
+    uint32_t length; ///< Length of cell, including all headers.
+    uint8_t data; ///< The data of the cell, with length `.length`. Contains the entire data, including Size, Magic, then Data.x
   } REGFS_CELL;
 
     typedef struct REGFS_CELL_NK {
+/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
 /*  0x00 */  uint8_t magic[0x2];    ///< "nk"
 /*  0x02 */  uint8_t is_root[0x2];  ///< if == 0x2C, then a root key
 /*  0x04 */  uint8_t timestamp[0x8];

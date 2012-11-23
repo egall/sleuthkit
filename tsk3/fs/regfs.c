@@ -69,48 +69,71 @@ regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
 }
 
 /**
- * Given the address as `inum`, load metadata about the Cell into 
- * the cell pointed to by `cell`.
- * @return TSK_OK on success, TSK_ERR on error.
+ * Given the address as `inum`, load metadata and the content of the cell
+ *   and return this as a new structure. 
+ * @return A new REGFS_CELL on success, NULL on error.
  */
-static TSK_RETVAL_ENUM
-reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
+static REGFS_CELL *
+reg_load_cell(TSK_FS_INFO *fs, TSK_INUM_T inum) {
   ssize_t count;
   uint32_t len;
   uint16_t type;
   uint8_t  buf[6];
+  REGFS_CELL *cell;
 
   if (inum < fs->first_block || inum > fs->last_block) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
     tsk_error_set_errstr("Invalid block number to load: %" PRIuDADDR "", inum);
-    return TSK_ERR;
+    return NULL;
   }
 
-  cell->inum = inum;
-
+  // 6 bytes: 4 bytes length, two bytes type
   count = tsk_fs_read(fs, inum, (char *)buf, 6);
   if (count != 6) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_READ);
     tsk_error_set_errstr("Failed to read cell structure");
-    return TSK_ERR;
+    return NULL;
   }
 
+  uint8_t is_allocated;
   len = (tsk_getu32(fs->endian, buf));
   if (len & 1 << 31) {
-    cell->is_allocated = 1;
-    cell->length = (-1 * tsk_gets32(fs->endian, buf));
+    is_allocated = 1;
+    len = (-1 * tsk_gets32(fs->endian, buf));
   } else {
-    cell->is_allocated = 0;
-    cell->length = (tsk_getu32(fs->endian, buf));
+    is_allocated = 0;
+    len = (tsk_getu32(fs->endian, buf));
   }
-  if (cell->length >= HBIN_SIZE) {
+  if (len >= HBIN_SIZE) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-    tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIuINUM ")",
-			 (unsigned long)cell->length);
-    return TSK_ERR;
+    tsk_error_set_errstr("Registry cell corrupt: size too large (%" PRIu32 ")",
+			 len);
+    return NULL;
+  }
+
+  // this may be a few bytes too long.
+  cell = (REGFS_CELL *)tsk_malloc(sizeof(REGFS_CELL) + len);
+  if (cell == NULL) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_AUX_MALLOC);
+    tsk_error_set_errstr("Failed to malloc new cell structure.");
+    return NULL;
+  }
+
+  cell->inum = inum;
+  cell->length = len;
+  cell->is_allocated = is_allocated;
+
+  count = tsk_fs_read(fs, (cell->inum), (char *) &cell->data, cell->length);
+  if (count != cell->length) {
+    free(cell);
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("Failed to read cell structure");
+    return NULL;
   }
 
   type = (tsk_getu16(fs->endian, buf + 4));
@@ -128,7 +151,6 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
   case 0x686c:
     cell->type = TSK_REGFS_RECORD_TYPE_LH;
     break;
-  case 0x696c:
     cell->type = TSK_REGFS_RECORD_TYPE_LI;
     break;
   case 0x6972:
@@ -144,8 +166,8 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
     cell->type = TSK_REGFS_RECORD_TYPE_UNKNOWN;
     break;
   }
-  
-  return TSK_OK;
+
+  return cell;
 }
 
 /** 
@@ -156,6 +178,7 @@ reg_load_cell(TSK_FS_INFO *fs, REGFS_CELL *cell, TSK_INUM_T inum) {
 static uint8_t
 reg_load_attrs(TSK_FS_FILE * a_fs_file)
 {
+    a_fs_file->meta->attr = 0;
     return 0;
 }
 
@@ -163,12 +186,17 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
  * reg_file_add_meta
  * Load the associated metadata for the file with inode at `inum`
  * into the file structure `a_fs_file`.
+ * 
+ * Sets the content_ptr to an instance of REGFS_CELL.
+ * 
  * If the `meta` field of `a_fs_file` is already set, it will be
  *   cleared and reset.
+ * 
  * As for the `meta.type`:
  *   - vk records --> file
  *   - nk records --> directories
  *   - else       --> virtual files
+ * 
  * Until we do some parsing of security info, the mode
  *   is 0777 for all keys and values.
  *
@@ -177,15 +205,16 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
  */
 uint8_t
 reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
-    REGFS_CELL cell;
-    ssize_t count;
+    REGFS_CELL *cell;
 
     tsk_error_reset();
 
     if (inum < fs->first_inum || inum > fs->last_inum) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
-        tsk_error_set_errstr("regfs_file_add_meta: %" PRIuINUM " too large/small", 
+        tsk_error_set_errstr("regfs_file_add_meta: %" 
+			       PRIuINUM 
+			       " too large/small", 
 			     inum);
         return 1;
     }
@@ -202,34 +231,39 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     }
     a_fs_file->fs_info = fs;
 
-    if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
-        return 1;
-    }
-
     // we will always reset the meta field
     // because this is simple.
     if (a_fs_file->meta != NULL) {
         tsk_fs_meta_close(a_fs_file->meta);
     }
 
+    a_fs_file->name = NULL;
+
+    cell = reg_load_cell(fs, inum);
+    if (cell == NULL) {
+      return 1;
+    }
+
     // for the time being, stuff the entire Record into the 
     // meta content field. On average, it won't be very big.
     // And it shouldn't ever be larger than 4096 bytes.
-    if (cell.length > HBIN_SIZE) {
+    if (cell->length > HBIN_SIZE) {
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr("regfs_inode_lookup: cell too large");
         return 1;
     }
-    if ((a_fs_file->meta = tsk_fs_meta_alloc(cell.length)) == NULL) {
+    if ((a_fs_file->meta = tsk_fs_meta_alloc(0)) == NULL) {
         return 1;
     }
+    a_fs_file->meta->content_ptr = cell;
+    a_fs_file->meta->content_len = sizeof(REGFS_CELL) + cell->length;
 
     a_fs_file->meta->addr = inum;
     a_fs_file->meta->flags = TSK_FS_META_FLAG_ALLOC;
-    if (cell.type == TSK_REGFS_RECORD_TYPE_VK) {
+    if (cell->type == TSK_REGFS_RECORD_TYPE_VK) {
       a_fs_file->meta->type = TSK_FS_META_TYPE_REG;
     }
-    else if (cell.type == TSK_REGFS_RECORD_TYPE_NK) {
+    else if (cell->type == TSK_REGFS_RECORD_TYPE_NK) {
       a_fs_file->meta->type = TSK_FS_META_TYPE_DIR;
     }
     else {
@@ -239,14 +273,14 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->nlink = 1;
 
     // TODO(wb): parse the size of vk record data
-    a_fs_file->meta->size = cell.length;
+    a_fs_file->meta->size = cell->length;
 
     // TODO(wb): parse security info
     a_fs_file->meta->uid = 0;
     a_fs_file->meta->gid = 0;
 
-    if (cell.type == TSK_REGFS_RECORD_TYPE_NK) {
-      REGFS_CELL_NK *nk = (REGFS_CELL_NK *)&cell;
+    if (cell->type == TSK_REGFS_RECORD_TYPE_NK) {
+      REGFS_CELL_NK *nk = (REGFS_CELL_NK *)&cell->data;
       uint64_t nttime = tsk_getu64(fs->endian, nk->timestamp);
       a_fs_file->meta->mtime = nt2unixtime(nttime);
       a_fs_file->meta->mtime_nano = nt2nano(nttime);
@@ -272,18 +306,9 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->time2.ext2.dtime = 0;
     a_fs_file->meta->time2.ext2.dtime_nano = 0;
 
-    count = tsk_fs_read(fs, inum, (char *)(a_fs_file->meta->content_ptr), 
-			cell.length);
-    if (count != cell.length) {
-      tsk_error_reset();
-      tsk_error_set_errno(TSK_ERR_FS_READ);
-      tsk_error_set_errstr("Failed to read cell structure");
-      return TSK_ERR;
-    }
-
     a_fs_file->meta->seq = 0;
 
-    a_fs_file->meta->link = "";
+    a_fs_file->meta->link = 0;
 
     if (reg_load_attrs(a_fs_file) == 1) {
       return TSK_ERR;
@@ -580,7 +605,7 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     }
 
     if (regfs_utf16to8(fs->endian, "REGF hive name label",
-		       reg->regf.hive_name, 30,
+		       reg->regf.hive_name, 64,
 		       asc, 512) != TSK_OK) {
 	tsk_error_reset();
 	tsk_error_set_errno(TSK_ERR_FS_UNICODE);
@@ -640,39 +665,25 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 		  REGFS_CELL *cell, TSK_DADDR_T numblock, int32_t sec_skew) {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     ssize_t count;
-    uint8_t buf[HBIN_SIZE];
+	//	REGFS_CELL *cell;
     REGFS_CELL_NK *nk;
     char s[512]; // to be used throughout, temporarily
     uint16_t name_length;
+    TSK_FS_FILE *the_file;
+    char timeBuf[128];
 
-    // TODO(wb): need a call to the following function
-    // tsk_fs_file_open_meta(TSK_FS_INFO * a_fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T a_addr)
-    // and use the TSK_FS_FILE structure instead of
-    // directly accessing the REGFS_CELL_NK memory structure
-
-
-    if (cell->length > HBIN_SIZE) {
-      tsk_error_reset();
-      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-      tsk_error_set_errstr("Registry cell corrupt: size too large 4");
+    the_file = tsk_fs_file_open_meta(fs, NULL, cell->inum);
+    if (the_file == NULL) {
       return TSK_ERR;
     }
-
-    count = tsk_fs_read(fs, (cell->inum), (char *)buf, cell->length);
-    if (count != cell->length) {
-      tsk_error_reset();
-      tsk_error_set_errno(TSK_ERR_FS_READ);
-      tsk_error_set_errstr("Failed to read cell structure");
-      return TSK_ERR;
-    }
+	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+	printf("length: 0x%x\n", cell->length);
+	nk = (REGFS_CELL_NK *)&cell->data;
 
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "NK");
-
-    nk = (REGFS_CELL_NK *)(buf + 4);
 
     if ((tsk_gets32(fs->endian, nk->classname_offset)) == 0xFFFFFFFF) {
       tsk_fprintf(hFile, "Class Name: %s\n", "None");
@@ -685,27 +696,30 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       classname_length = (tsk_gets16(fs->endian, nk->classname_length));
 
       if (classname_length > 512) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-	tsk_error_set_errstr("NK classname string too long");
-	return TSK_ERR;
+		tsk_fs_file_close(the_file);
+		tsk_error_reset();
+		tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+		tsk_error_set_errstr("NK classname string too long");
+		return TSK_ERR;
       }
-
+	  
       count = tsk_fs_read(fs, FIRST_HBIN_OFFSET + classname_offset + 4, 
-			  s, classname_length);
+						  s, classname_length);
       if (count != classname_length) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_READ);
-	tsk_error_set_errstr("Failed to read NK classname string");
-	return TSK_ERR;
+		tsk_fs_file_close(the_file);
+		tsk_error_reset();
+		tsk_error_set_errno(TSK_ERR_FS_READ);
+		tsk_error_set_errstr("Failed to read NK classname string");
+		return TSK_ERR;
       }
-
+	  
       if (regfs_utf16to8(fs->endian, "NK class name", (uint8_t *)s, 
-			 512, asc, 512) != TSK_OK) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_UNICODE);
-	tsk_error_set_errstr("Failed to convert NK classname string to UTF-8");
-	return TSK_ERR;
+						 512, asc, 512) != TSK_OK) {
+		tsk_fs_file_close(the_file);
+		tsk_error_reset();
+		tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+		tsk_error_set_errstr("Failed to convert NK classname string to UTF-8");
+		return TSK_ERR;
       }
 
       tsk_fprintf(hFile, "Class Name: %s\n", asc);    
@@ -713,12 +727,13 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 
     name_length = (tsk_getu16(fs->endian, nk->name_length));
     if (name_length > 512) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-	tsk_error_set_errstr("NK key name string too long");
-	return TSK_ERR;
+	  tsk_fs_file_close(the_file);
+	  tsk_error_reset();
+	  tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	  tsk_error_set_errstr("NK key name string too long");
+	  return TSK_ERR;
     }
-
+	memset(s, 0, sizeof(s));
     strncpy(s, (char *)nk->name, name_length);
     tsk_fprintf(hFile, "Key Name: %s\n", s);
 
@@ -728,31 +743,37 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       tsk_fprintf(hFile, "Root Record: %s\n", "No");
     }
 
-    /* TODO(wb): Once we have to fs_meta down...
     if (sec_skew != 0) {
         tsk_fprintf(hFile, "\nAdjusted Entry Times:\n");
 
-        if (fs_meta->mtime)
-            fs_meta->mtime -= sec_skew;
+        if (the_file->meta->mtime) {
+            the_file->meta->mtime -= sec_skew;
+		}
 
         tsk_fprintf(hFile, "Modified:\t%s\n",
-            tsk_fs_time_to_str(fs_meta->mtime, timeBuf));
+            tsk_fs_time_to_str(the_file->meta->mtime, timeBuf));
 
-        if (fs_meta->mtime == 0)
-            fs_meta->mtime += sec_skew;
+        if (the_file->meta->mtime == 0) {
+            the_file->meta->mtime += sec_skew;
+		}
 
         tsk_fprintf(hFile, "\nOriginal Entry Times:\n");
     }
     else {
-        tsk_fprintf(hFile, "\Entry Times:\n");
+        tsk_fprintf(hFile, "\nEntry Times:\n");
     }
-    tsk_fprintf(hFile, "Modified:\t%s\n", tsk_fs_time_to_str(fs_meta->mtime,
+    tsk_fprintf(hFile, "Modified:\t%s\n", tsk_fs_time_to_str(the_file->meta->mtime,
             timeBuf));
-    */
 
-    tsk_fprintf(hFile, "Parent Record: %" PRIuINUM "\n", 
-		FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
+    if ((tsk_getu16(fs->endian, nk->is_root)) == 0x2C) {
+	  tsk_fprintf(hFile, "Parent Record: %s\n", "None (root record)");
+    } else {
+	  // u32 here, not PRIuINUM since the field is a u32...
+	  tsk_fprintf(hFile, "Parent Record: %" PRIu32 "\n", 
+				  FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
+    }
 
+	tsk_fs_file_close(the_file);
     return TSK_OK;
 }
 
@@ -822,6 +843,7 @@ reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
   //    REGFS_INFO *reg = (REGFS_INFO *) fs;
     ssize_t count;
     uint8_t buf[HBIN_SIZE];
+	memset(buf, 0, HBIN_SIZE);
 
     if (cell->length > HBIN_SIZE) {
       tsk_error_reset();
@@ -842,6 +864,7 @@ reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "Unknown (Data Record?)");
     tsk_fprintf(hFile, "Type identifier: 0x%x%x\n", *(buf + 4), *(buf + 5));
+
     return TSK_OK;
 }
 
@@ -865,56 +888,58 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
     TSK_INUM_T inum, TSK_DADDR_T numblock, int32_t sec_skew)
 {
   //    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    REGFS_CELL cell;
+  REGFS_CELL *cell;
 
-    tsk_fprintf(hFile, "\nCELL INFORMATION\n");
-    tsk_fprintf(hFile, "--------------------------------------------\n");
+  tsk_fprintf(hFile, "\nCELL INFORMATION\n");
+  tsk_fprintf(hFile, "--------------------------------------------\n");
+  
+  cell = reg_load_cell(fs, inum);
+  if (cell == NULL) {
+    return 1;
+  }
 
-    if (reg_load_cell(fs, &cell, inum) != TSK_OK) {
-      return 1;
-    }
+  tsk_fprintf(hFile, "Cell: %" PRIuINUM "\n", inum);    
+  if (cell->is_allocated) {
+    tsk_fprintf(hFile, "Allocated: %s\n", "Yes");    
+  } else {
+    tsk_fprintf(hFile, "Allocated: %s\n", "No");    
+  }
+  tsk_fprintf(hFile, "Cell Size: %" PRIu32 "\n", cell->length);
 
-    tsk_fprintf(hFile, "Cell: %" PRIuINUM "\n", inum);    
-    if (cell.is_allocated) {
-      tsk_fprintf(hFile, "Allocated: %s\n", "Yes");    
-    } else {
-      tsk_fprintf(hFile, "Allocated: %s\n", "No");    
-    }
-    tsk_fprintf(hFile, "Cell Size: %" PRIuINUM "\n", cell.length);
+  switch (cell->type) {
+  case TSK_REGFS_RECORD_TYPE_VK:
+    reg_istat_vk(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_NK:
+    reg_istat_nk(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_LF:
+    reg_istat_lf(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_LH:
+    reg_istat_lh(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_LI:
+    reg_istat_li(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_RI:
+    reg_istat_ri(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_SK:
+    reg_istat_sk(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_DB:
+    reg_istat_db(fs, hFile, cell, numblock, sec_skew);
+    break;
+  case TSK_REGFS_RECORD_TYPE_UNKNOWN:
+    // fall through intended
+  default:
+    reg_istat_unknown(fs, hFile, cell, numblock, sec_skew);
+    break;
+  }
 
-    switch (cell.type) {
-    case TSK_REGFS_RECORD_TYPE_VK:
-      reg_istat_vk(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_NK:
-      reg_istat_nk(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_LF:
-      reg_istat_lf(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_LH:
-      reg_istat_lh(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_LI:
-      reg_istat_li(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_RI:
-      reg_istat_ri(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_SK:
-      reg_istat_sk(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_DB:
-      reg_istat_db(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    case TSK_REGFS_RECORD_TYPE_UNKNOWN:
-      // fall through intended
-    default:
-      reg_istat_unknown(fs, hFile, &cell, numblock, sec_skew);
-      break;
-    }
-
-    return 0;
+  free(cell);
+  return 0;
 }
 
 static void
@@ -925,6 +950,7 @@ reg_close(TSK_FS_INFO * fs)
     if (fs == NULL)
         return;
     tsk_fs_free(fs);
+    return;
 }
 
 int
@@ -1049,10 +1075,11 @@ reg_load_regf(TSK_FS_INFO *fs_info, REGF *regf) {
  * @param img_info Disk image to analyze
  * @param offset Byte offset where file system starts
  * @param ftype Specific type of file system
- * @param test NOT USED * @returns NULL on error or if data is not a Registry
+ * @param test NOT USED 
+ * @returns NULL on error or if data is not a Registry
  */
 TSK_FS_INFO *
-regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
+reg_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     TSK_FS_TYPE_ENUM ftype, uint8_t test)
 {
     TSK_FS_INFO *fs;
@@ -1086,14 +1113,14 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         return NULL;
     }
 
-
     fs->first_inum = FIRST_HBIN_OFFSET;
     fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
-    // TODO(wb): set root inode
+	fs->root_inum = (tsk_getu32(fs->endian, reg->regf.first_key_offset)); 
+
     // TODO(wb): set num inodes
     fs->block_size = HBIN_SIZE;
     fs->first_block = 0;
-    // TODO(wb): from where is this offset relative?
+    // TODO(wb): from where is this offset relative? first hbin or absolute?
     fs->last_block = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)); 
     fs->last_block_act = (img_info->size - (img_info->size % HBIN_SIZE)) / HBIN_SIZE;
 
@@ -1117,7 +1144,6 @@ regfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->jentry_walk = reg_jentry_walk;
     fs->jopen = reg_jopen;
     fs->journ_inum = 0;
-
 
     return (fs);
 }

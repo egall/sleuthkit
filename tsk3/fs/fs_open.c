@@ -172,6 +172,26 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
             tsk_error_reset();
         }
 
+        if ((fs_info =
+                reg_open(a_img_info, a_offset,
+			 TSK_FS_TYPE_REG_DETECT, 1)) != NULL) {
+            if (set == NULL) {
+                set = "REG";
+                fs_set = fs_info;
+            }
+            else {
+                fs_set->close(fs_set);
+                fs_info->close(fs_info);
+                tsk_error_reset();
+                tsk_error_set_errno(TSK_ERR_FS_UNKTYPE);
+                tsk_error_set_errstr("%s", set);
+                return NULL;
+            }
+        }
+        else {
+            tsk_error_reset();
+        }
+
 
 #if TSK_USE_HFS
         if ((fs_info =
@@ -212,7 +232,6 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
             tsk_error_reset();
         }
 
-
         if (fs_set == NULL) {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_UNKTYPE);
@@ -238,7 +257,7 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
         else if (TSK_FS_TYPE_ISSWAP(a_ftype))
             return swapfs_open(a_img_info, a_offset);
         else if (TSK_FS_TYPE_ISREG(a_ftype))
-            return regfs_open(a_img_info, a_offset);
+	  return reg_open(a_img_info, a_offset, a_ftype, 0);
         else {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_UNSUPTYPE);
