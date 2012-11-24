@@ -898,6 +898,8 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
   tsk_fprintf(hFile, "\nCELL INFORMATION\n");
   tsk_fprintf(hFile, "--------------------------------------------\n");
 
+  // we load a TSK_FS_FILE up for consistency, and since
+  //   it handles all the cell loading, reading, etc.
   the_file = tsk_fs_file_open_meta(fs, NULL, inum);
   if (the_file == NULL) {
 	return 1;
@@ -912,7 +914,6 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
   }
   tsk_fprintf(hFile, "Cell Size: %" PRIu32 "\n", cell->length);
 
-  // TODO(wb): start passing a file, not cell, into istat_* functions
   switch (cell->type) {
   case TSK_REGFS_RECORD_TYPE_VK:
     reg_istat_vk(fs, hFile, the_file, numblock, sec_skew);
