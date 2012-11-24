@@ -179,6 +179,7 @@ static uint8_t
 reg_load_attrs(TSK_FS_FILE * a_fs_file)
 {
     a_fs_file->meta->attr = 0;
+    a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
     return 0;
 }
 
@@ -313,13 +314,9 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     if (reg_load_attrs(a_fs_file) == 1) {
       return TSK_ERR;
     }
-    // TODO(wb): should this be set by reg_load_attrs?
-    a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
 
     return TSK_OK;
 }
-
-
 
 /**
  * @return 1 on error, 0 otherwise.
