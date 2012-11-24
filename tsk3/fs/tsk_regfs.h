@@ -100,7 +100,6 @@ extern "C" {
 #define HBIN_SIZE 4096
 #define FIRST_HBIN_OFFSET 4096
 
-
   enum TSK_REGFS_RECORD_TYPE_ENUM {
     TSK_REGFS_RECORD_TYPE_NK,  ///< "nk" 0x6b6e The main nodes in the tree. 
     TSK_REGFS_RECORD_TYPE_VK,  ///< "vk" 0x6b76
@@ -166,6 +165,13 @@ extern "C" {
 /* 0x30 */    uint8_t hive_name[64]; ///< in unicode. TODO(wb): find exact length
 /* 0x70 */    uint8_t ignored[HBIN_SIZE - 0x70];
   } REGF;
+
+  typedef struct {
+/* 0x00 */    uint8_t magic[4];  ///< "hbin"
+/* 0x04 */    uint8_t offset[4]; ///< relative offset from first HBIN (0x1000)
+/* 0x08 */    uint8_t length[4]; ///< length of this HBIN.
+/* 0x0C */    uint8_t unused[0x14];
+  } HBIN;
 
   typedef struct {
     TSK_FS_INFO fs_info;    /* super class */
