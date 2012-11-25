@@ -238,8 +238,6 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
         tsk_fs_meta_close(a_fs_file->meta);
     }
 
-    a_fs_file->name = NULL;
-
     cell = reg_load_cell(fs, inum);
     if (cell == NULL) {
       return 1;
@@ -249,7 +247,8 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     // meta content field. On average, it won't be very big.
     // And it shouldn't ever be larger than 4096 bytes.
     if ((a_fs_file->meta = tsk_fs_meta_alloc(0)) == NULL) {
-        return 1;
+      free(cell);
+      return 1;
     }
     a_fs_file->meta->content_ptr = cell;
     a_fs_file->meta->content_len = sizeof(REGFS_CELL) + cell->length;
@@ -307,7 +306,8 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 
     a_fs_file->meta->link = 0;
 
-    if (reg_load_attrs(a_fs_file) == 1) {
+    if (reg_load_attrs(a_fs_file) != TSK_OK) {
+      tsk_fs_file_close(a_fs_file);
       return TSK_ERR;
     }
 
@@ -592,13 +592,294 @@ reg_get_default_attr_type(const TSK_FS_FILE * a_file)
         return TSK_FS_ATTR_TYPE_NTFS_DATA;
 }
 
+static TSK_RETVAL_ENUM
+reg_dir_open_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
+			 REGFS_CELL *cell, TSK_INUM_T parent_inum);
 
+static TSK_RETVAL_ENUM
+reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
+				REGFS_CELL *cell, TSK_INUM_T parent_inum,
+				ssize_t offset_struct_size) {
+  unsigned int i;
+  TSK_FS_NAME *fs_name;
+  // use LF records as a template, same struct as LI and RI, besides
+  //   the size of each array entry size
+  REGFS_CELL_LF *subkey_list = (REGFS_CELL_LF *)&cell->data;
+
+  fs_name = tsk_fs_name_alloc(512, 0);
+  if (fs_name == NULL) {
+    return TSK_ERR;
+  }
+
+  for (i = 0; i < tsk_getu16(fs->endian, subkey_list->num_offsets); i++) {
+    TSK_INUM_T inum;
+    REGFS_CELL *child_cell;
+    REGFS_CELL_NK *nk;
+    char s[512];
+    uint16_t name_length;
+
+    tsk_fs_name_reset(fs_name);
+
+    inum = FIRST_HBIN_OFFSET;
+    inum += tsk_getu32(fs->endian, 
+		       (((uint8_t *)&subkey_list->offset_list) + 
+			             i * offset_struct_size));
+
+    child_cell = reg_load_cell(fs, inum);
+    if (child_cell == NULL) {
+      return TSK_ERR;
+    }
+    nk = (REGFS_CELL_NK *)&child_cell->data;
+
+    name_length = (tsk_getu16(fs->endian, nk->name_length));
+    if (name_length > 512) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("NK key name string too long");
+      return TSK_ERR;
+    }
+    memset(s, 0, sizeof(s));
+    strncpy(s, (char *)nk->name, name_length);
+
+    strncpy(fs_name->name, s, 512);
+    fs_name->shrt_name = NULL;
+    fs_name->meta_addr = inum;
+    fs_name->meta_seq = 0;
+    fs_name->par_addr = parent_inum;
+    fs_name->type = TSK_FS_NAME_TYPE_DIR;
+    fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
+
+    if (tsk_fs_dir_add(fs_dir, fs_name)) {
+      tsk_fs_name_free(fs_name);
+      free(child_cell);
+      return TSK_ERR;
+    }
+
+    free(child_cell);
+  }
+
+  tsk_fs_name_free(fs_name);
+  return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_dir_open_meta_lf(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
+		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+  REGFS_CELL_LF *lf = (REGFS_CELL_LF *)&cell->data;
+
+  if (tsk_verbose) {
+    tsk_fprintf(stderr, "reg_dir_open_meta_lf: subkey list has type: %s\n", 
+		"LF");
+    tsk_fprintf(stderr, "reg_dir_open_meta_lf: subkey list at : 0x%llx\n", 
+		cell->inum);
+    tsk_fprintf(stderr, "reg_dir_open_meta_lf: subkey num offsets: %d\n",
+		tsk_getu16(fs->endian, lf->num_offsets));
+  }
+
+  return reg_dir_open_direct_subkey_list(fs, fs_dir, cell, parent_inum, 8);
+}
+
+static TSK_RETVAL_ENUM
+reg_dir_open_meta_lh(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
+		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+  REGFS_CELL_LH *lh = (REGFS_CELL_LH *)&cell->data;
+
+  if (tsk_verbose) {
+    tsk_fprintf(stderr, "reg_dir_open_meta_lh: subkey list has type: %s\n", 
+		"LH");
+    tsk_fprintf(stderr, "reg_dir_open_meta_lh: subkey list at : 0x%llx\n", 
+		cell->inum);
+    tsk_fprintf(stderr, "reg_dir_open_meta_lh: subkey num offsets: %d\n",
+		tsk_getu16(fs->endian, lh->num_offsets));
+  }
+
+  return reg_dir_open_direct_subkey_list(fs, fs_dir, cell, parent_inum, 8);
+}
+
+static TSK_RETVAL_ENUM
+reg_dir_open_meta_ri(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
+		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+  unsigned int i;
+  REGFS_CELL_RI *ri = (REGFS_CELL_RI *)&cell->data;
+  if (tsk_verbose) {
+    tsk_fprintf(stderr, "Subkey list has type: %s\n", "RI");
+  }
+
+  for (i = 0; i < tsk_getu16(fs->endian, ri->num_offsets); i++) {
+    TSK_INUM_T inum;
+    REGFS_CELL *child_cell;
+
+    inum = FIRST_HBIN_OFFSET;
+    inum += tsk_getu32(fs->endian, 
+		       (((uint8_t *)&ri->offset_list) + 
+			             i * 4));
+
+    child_cell = reg_load_cell(fs, inum);
+    if (child_cell == NULL) {
+      return TSK_ERR;
+    }
+
+    if(reg_dir_open_subkey_list(fs, fs_dir, child_cell, parent_inum) != TSK_OK) {
+      free(child_cell);
+      return TSK_ERR;
+    }
+
+    free(child_cell);
+  }
+
+  return TSK_OK;
+}
+
+static TSK_RETVAL_ENUM
+reg_dir_open_meta_li(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
+		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+  REGFS_CELL_LI *li = (REGFS_CELL_LI *)&cell->data;
+  if (tsk_verbose) {
+    tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey list has type: %s\n", 
+		"LI");
+    tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey list at : 0x%llx\n", 
+		cell->inum);
+    tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey num offsets: %d\n",
+		tsk_getu16(fs->endian, li->num_offsets));
+  }
+
+  return reg_dir_open_direct_subkey_list(fs, fs_dir, cell, parent_inum, 8);
+}
+
+static TSK_RETVAL_ENUM
+reg_dir_open_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
+		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+  TSK_RETVAL_ENUM ret;
+
+  switch(cell->type) {
+  case TSK_REGFS_RECORD_TYPE_LF:
+    ret = reg_dir_open_meta_lf(fs, fs_dir, cell, parent_inum);
+    if (ret != TSK_OK) {
+      return ret;
+    }
+    break;
+  case TSK_REGFS_RECORD_TYPE_LH:
+    ret = reg_dir_open_meta_lh(fs, fs_dir, cell, parent_inum);
+    if (ret != TSK_OK) {
+      return ret;
+    }
+    break;
+  case TSK_REGFS_RECORD_TYPE_RI:
+    ret = reg_dir_open_meta_ri(fs, fs_dir, cell, parent_inum);
+    if (ret != TSK_OK) {
+      return ret;
+    }
+    break;
+  case TSK_REGFS_RECORD_TYPE_LI:
+    ret = reg_dir_open_meta_li(fs, fs_dir, cell, parent_inum);
+    if (ret != TSK_OK) {
+      return ret;
+    }
+    break;
+  default:
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_UNKTYPE);
+    tsk_error_set_errstr("reg_dir_open_subkey_list: unexpected subkey type");
+    return TSK_ERR;
+  }
+
+  return TSK_OK;
+}
+
+
+/**
+ * reg_dir_open_meta
+ * 
+ * Process a directory and load up FS_DIR with the entries. If a pointer to
+ * an already allocated FS_DIR struture is given, it will be cleared.  If no existing
+ * FS_DIR structure is passed (i.e. NULL), then a new one will be created. If the return
+ * value is error or corruption, then the FS_DIR structure is freed.
+ *
+ * @param a_fs File system to analyze
+ * @param a_fs_dir Pointer to FS_DIR pointer. Can contain an already allocated
+ * structure or a new structure.
+ * @param a_addr Address of directory to process.
+ * @returns error, corruption, ok etc.
+ */
 TSK_RETVAL_ENUM
-reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir,
-    TSK_INUM_T a_addr)
+reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
 {
-  //    REGFS_INFO *reg = (REGFS_INFO *) fs;
-    return 0;
+    TSK_FS_DIR *fs_dir;
+    REGFS_CELL *cell;
+    REGFS_CELL_NK *nk;
+    TSK_INUM_T list_inum;
+    REGFS_CELL *list_cell;
+    TSK_RETVAL_ENUM ret;    
+
+    if ((inum < fs->first_inum) || (inum > fs->last_inum)) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("reg_dir_open_meta: invalid inode value: %"
+            PRIuINUM "\n", inum);
+        return TSK_ERR;
+    }
+    else if (a_fs_dir == NULL) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr
+            ("reg_dir_open_meta: NULL fs_dir argument given");
+        return TSK_ERR;
+    }
+
+    if (tsk_verbose) {
+        tsk_fprintf(stderr,
+		    "reg_file_add_meta: opening directory at 0x%llx\n", inum);
+    }
+
+    fs_dir = *a_fs_dir;
+    if (fs_dir) {
+        tsk_fs_dir_reset(fs_dir);
+    }
+    else {
+        if ((*a_fs_dir = fs_dir =
+                tsk_fs_dir_alloc(fs, inum, 128)) == NULL) {
+            return TSK_ERR;
+        }
+    }
+
+    // TODO(wb) figure this thing out
+    //if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
+    //    return tsk_fs_dir_find_orphans(fs, fs_dir);
+    //}
+
+    fs_dir->fs_file = tsk_fs_file_open_meta(fs, NULL, inum);
+    if (fs_dir->fs_file == NULL) {
+      tsk_fs_dir_close(fs_dir);
+      return TSK_COR;
+    }
+
+    cell = fs_dir->fs_file->meta->content_ptr;
+    if (cell->type != TSK_REGFS_RECORD_TYPE_NK) {
+      tsk_fs_dir_close(fs_dir);
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_ARG);
+      tsk_error_set_errstr("reg_dir_open_meta: inode argument does not have type NK");
+      return TSK_ERR;
+    }
+    nk = (REGFS_CELL_NK *)&cell->data;
+
+    list_inum = FIRST_HBIN_OFFSET;
+    list_inum += tsk_getu32(fs->endian, nk->subkey_list_offset);
+    list_cell = reg_load_cell(fs, list_inum);
+    if (list_cell == NULL) {
+      tsk_fs_dir_close(fs_dir);
+      return TSK_ERR;
+    }
+
+    ret = reg_dir_open_subkey_list(fs, fs_dir, list_cell, inum);
+    if (ret != TSK_OK) {
+      free(list_cell);
+      tsk_fs_dir_close(fs_dir);
+      return ret;
+    }
+
+    free(list_cell);
+    return TSK_OK;
 }
 
 typedef struct REGFS_CELL_COUNT {
@@ -826,8 +1107,8 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     uint16_t name_length;
     char timeBuf[128];
 
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
-	nk = (REGFS_CELL_NK *)&cell->data;
+    cell = (REGFS_CELL *)the_file->meta->content_ptr;
+    nk = (REGFS_CELL_NK *)&cell->data;
 
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
@@ -877,7 +1158,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 	  tsk_error_set_errstr("NK key name string too long");
 	  return TSK_ERR;
     }
-	memset(s, 0, sizeof(s));
+    memset(s, 0, sizeof(s));
     strncpy(s, (char *)nk->name, name_length);
     tsk_fprintf(hFile, "Key Name: %s\n", s);
 
@@ -914,7 +1195,15 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     } else {
 	  // u32 here, not PRIuINUM since the field is a u32...
 	  tsk_fprintf(hFile, "Parent Record: %" PRIu32 "\n", 
-				  FIRST_HBIN_OFFSET + (tsk_getu32(fs->endian, nk->parent_nk_offset)));
+		      FIRST_HBIN_OFFSET + 
+		      (tsk_getu32(fs->endian, nk->parent_nk_offset)));
+    }
+
+    if (tsk_getu32(fs->endian, nk->num_subkeys) == 0xFFFFFFFF) {
+	  tsk_fprintf(hFile, "Number of subkeys: %s\n", "None");
+    } else {
+	  tsk_fprintf(hFile, "Number of subkeys: %d\n", 
+		      tsk_getu32(fs->endian, nk->num_subkeys));
     }
 
     return TSK_OK;
@@ -1238,6 +1527,7 @@ reg_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 {
     TSK_FS_INFO *fs;
     REGFS_INFO *reg;
+    REGFS_CELL_COUNT cell_count;
 
     tsk_error_reset();
 
@@ -1270,11 +1560,19 @@ reg_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->first_inum = FIRST_HBIN_OFFSET + 0x20;
     fs->last_inum  = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + HBIN_SIZE;
     fs->root_inum = (tsk_getu32(fs->endian, reg->regf.first_key_offset)); 
+
+    memset(&cell_count, 0, sizeof(REGFS_CELL_COUNT));
+    //    if(reg_inode_walk(fs, fs->first_inum, fs->last_inum,
+    //		      TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC,
+    //		      reg_cell_count_callback, &cell_count)) {
+      // TODO(wb): ignore errors here?
+      // ignore error and do the best we can.
+    //    }
+    //    fs->inum_count = cell_count.num_active_cells + cell_count.num_inactive_cells;
+    fs->inum_count = 0;
     
-    // TODO(wb): set num inodes
     fs->block_size = HBIN_SIZE;
     fs->first_block = 0;
-    // TODO(wb): from where is this offset relative? first hbin or absolute?
     fs->last_block = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)); 
     fs->last_block_act = (img_info->size - (img_info->size % HBIN_SIZE)) / HBIN_SIZE;
 

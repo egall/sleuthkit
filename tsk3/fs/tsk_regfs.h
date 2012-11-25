@@ -48,7 +48,7 @@
  *     [x] fs->block_getflags
  *       Get the flags associated with a particular Cell.
  *       Flags include ALLOC'd and UNALLOC'd.
- *     [ ] fs->inode_walk
+ *     [x] fs->inode_walk
  *       Iterates through each Record, and calls a callback function 
  *       with the TSK_FS_FILE pointer for the Record. Only Records whose
  *       attributes match a set of filter flags are passed to the 
@@ -56,7 +56,7 @@
  *     [-] fs->istat
  *       Use tsk_fs_file_open_meta to acquire a TSK_FS_FILE pointer
  *       for the requested Record.  Then, print out relevant data.
- *     [1] fs->file_add_meta
+ *     [x] fs->file_add_meta
  *       Given a TSK_FS_FILE, allocate memory (if necessary) for the
  *       metadata stored in TSK_FS_META substructure using 
  *       tsk_fs_meta_alloc.  This structure may also be reset by 
@@ -68,7 +68,7 @@
  *     [ ] fs->load_attrs
  *       Load data locations for a Record into runs.  This is how TSK will 
  *       access the data for a Record if you request it.
- *     [ ] fs->dir_open_meta
+ *     [-] fs->dir_open_meta
  *       Allocate (with tsk_fs_dir_alloc) or reset a TSK_FS_DIR structure,
  *       set the TSK_FS_FILE substructure, and add the names of entries
  *       in the directory as TSK_FS_NAME structures (which have inode
@@ -96,6 +96,8 @@ extern "C" {
 
 #define REG_REGF_MAGIC 0x66676572
 
+/// this is, uhhh, from experience?
+#define MAX_KEY_NAME_LENGTH 1024 
 
 #define HBIN_SIZE 4096
 #define FIRST_HBIN_OFFSET 4096
@@ -145,6 +147,39 @@ extern "C" {
 /*  0x4A */  uint8_t classname_length[0x2]; ///< In bytes, but classname is Unicode
 /*  0x4C */  uint8_t name[0x4]; ///< This may have a variable length
     } REGFS_CELL_NK;
+
+    typedef struct REGFS_CELL_LF {
+/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];    ///< "lf"
+/*  0x02 */  uint8_t num_offsets[0x2];
+/*  0x04 */  uint8_t offset_list[0x8]; ///< Array of {u32 relative offset, u32 hash} from the first HBIN.
+      /* the array will extend here... */
+    } REGFS_CELL_LF;
+
+    typedef struct REGFS_CELL_LH {
+/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];    ///< "lh"
+/*  0x02 */  uint8_t num_offsets[0x2];
+/*  0x04 */  uint8_t offset_list[0x8]; ///< Array of {u32 relative offset, u32 hash} from the first HBIN.
+      /* the array will extend here... */
+    } REGFS_CELL_LH;
+
+    typedef struct REGFS_CELL_RI {
+/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];    ///< "ri"
+/*  0x02 */  uint8_t num_offsets[0x2];
+/*  0x04 */  uint8_t offset_list[0x4]; ///< Array of u32 relative offsets from the first HBIN.
+      /* the array will extend here... */
+    } REGFS_CELL_RI;
+
+    typedef struct REGFS_CELL_LI {
+/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];    ///< "li"
+/*  0x02 */  uint8_t num_offsets[0x2];
+/*  0x04 */  uint8_t offset_list[0x4]; ///< Array of u32 relative offsets from the first HBIN.
+      /* the array will extend here... */
+    } REGFS_CELL_LI;
+
 
   /** \internal
    * Total size: 4096 bytes.
