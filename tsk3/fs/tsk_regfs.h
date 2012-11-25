@@ -148,6 +148,32 @@ extern "C" {
 /*  0x4C */  uint8_t name[0x4]; ///< This may have a variable length
     } REGFS_CELL_NK;
 
+  typedef enum TSK_REGFS_VALUE_TYPE {
+    TSK_REGFS_VALUE_TYPE_REGSZ = 0x0001,
+    TSK_REGFS_VALUE_TYPE_REGEXPANDSZ = 0x0002,
+    TSK_REGFS_VALUE_TYPE_REGBIN = 0x0003,
+    TSK_REGFS_VALUE_TYPE_REGDWORD = 0x0004,
+    TSK_REGFS_VALUE_TYPE_REGMULTISZ = 0x0007,
+    TSK_REGFS_VALUE_TYPE_REGQWORD = 0x000B,
+    TSK_REGFS_VALUE_TYPE_REGNONE = 0x0000,
+    TSK_REGFS_VALUE_TYPE_REGBIGENDIAN = 0x0005,
+    TSK_REGFS_VALUE_TYPE_REGLINK = 0x0006,
+    TSK_REGFS_VALUE_TYPE_REGRESOURCELIST = 0x0008,
+    TSK_REGFS_VALUE_TYPE_REGFULLRESOURCEDESCRIPTOR = 0x0009,
+    TSK_REGFS_VALUE_TYPE_REGRESOURCEREQUIREMENTLIST = 0x000A
+  } TSK_REGFS_VALUE_TYPE;
+
+  typedef struct REGFS_CELL_VK {
+/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];    ///< "vk"
+/*  0x02 */  uint8_t name_length[0x2];
+/*  0x04 */  uint8_t value_length[0x4];
+/*  0x08 */  uint8_t value_offset[0x4]; ///< relative to first hbin
+/*  0x0C */  uint8_t value_type[0x4]; ///< possible values: TSK_REGFS_VALUE_TYPE
+/*  0x10 */  uint8_t flags[0x4];
+/*  0x14 */  uint8_t name[0x4];
+  } REGFS_CELL_VK;
+
     typedef struct REGFS_CELL_LF {
 /* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
 /*  0x00 */  uint8_t magic[0x2];    ///< "lf"

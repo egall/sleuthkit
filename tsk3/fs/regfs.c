@@ -306,6 +306,8 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 
     a_fs_file->meta->link = 0;
 
+    // TODO(wb):
+    // only really relevant for VK records
     if (reg_load_attrs(a_fs_file) != TSK_OK) {
       tsk_fs_file_close(a_fs_file);
       return TSK_ERR;
@@ -810,6 +812,9 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
     TSK_INUM_T list_inum;
     REGFS_CELL *list_cell;
     TSK_RETVAL_ENUM ret;    
+    unsigned int i;
+    TSK_FS_NAME *fs_name;
+    REGFS_CELL *value_list_cell;
 
     if ((inum < fs->first_inum) || (inum > fs->last_inum)) {
         tsk_error_reset();
@@ -877,6 +882,105 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
       tsk_fs_dir_close(fs_dir);
       return ret;
     }
+    
+    fs_name = tsk_fs_name_alloc(512, 0);
+    if (fs_name == NULL) {
+      free(list_cell);
+      tsk_fs_dir_close(fs_dir);
+      return TSK_ERR;
+    }
+    
+    uint32_t num_values = tsk_getu32(fs->endian, nk->num_values);
+    if (num_values == 0xFFFFFFFF) {
+      num_values = 0;
+    }
+    if (num_values > 0) {
+      value_list_cell = reg_load_cell(fs, FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, nk->values_list_offset));
+      if (value_list_cell == NULL) {
+	free(list_cell);
+	tsk_fs_dir_close(fs_dir);
+	return TSK_ERR;
+      }
+      
+      for (i = 0; i < tsk_getu16(fs->endian, nk->num_values); i++) {
+	TSK_INUM_T child_inum;
+	REGFS_CELL *child_cell;
+	REGFS_CELL_VK *vk;
+	char s[512];
+	char asc[512];
+	uint16_t name_length;
+	
+	tsk_fs_name_reset(fs_name);
+	
+	child_inum = FIRST_HBIN_OFFSET;
+	child_inum += tsk_getu32(fs->endian, 
+				 (uint8_t *)&value_list_cell->data + i * 8);
+	
+	child_cell = reg_load_cell(fs, child_inum);
+	if (child_cell == NULL) {
+	  free(value_list_cell);
+	  free(list_cell);
+	  tsk_fs_dir_close(fs_dir);
+	  return TSK_ERR;
+	}
+	vk = (REGFS_CELL_VK *)&child_cell->data;
+	
+	name_length = (tsk_gets16(fs->endian, vk->name_length));
+	if (name_length > 512 - 1) {
+	  free(value_list_cell);
+	  free(list_cell);
+	  tsk_fs_dir_close(fs_dir);
+	  tsk_error_reset();
+	  tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	  tsk_error_set_errstr("VK name string too long");
+	  return TSK_ERR;
+	}
+	
+	if (name_length > 0) {
+	  uint32_t flags = (tsk_gets32(fs->endian, vk->flags));
+	  
+	  if ((flags & 0x01) > 0) {
+	    // ascii
+	    strncpy(asc, (char *)&vk->name, name_length + 1);
+	  } else {
+	    // unicode
+	    memcpy(s, &vk->name, name_length + 1);
+	    if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
+			       512, asc, 512) != TSK_OK) {
+	      free(value_list_cell);
+	      free(list_cell);
+	      tsk_fs_dir_close(fs_dir);
+	      tsk_error_reset();
+	      tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+	      tsk_error_set_errstr("Failed to convert VK name string to UTF-8");
+	      return TSK_ERR;
+	    }
+	  }
+	} else {
+	  strncpy(asc, "(default)", 512);
+	}
+	
+	strncpy(fs_name->name, asc, 512);
+	fs_name->shrt_name = NULL;
+	fs_name->meta_addr = child_inum;
+	fs_name->meta_seq = 0;
+	fs_name->par_addr = inum;
+	fs_name->type = TSK_FS_NAME_TYPE_REG;
+	fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
+	
+	if (tsk_fs_dir_add(fs_dir, fs_name)) {
+	  free(value_list_cell);
+	  free(list_cell);
+	  tsk_fs_dir_close(fs_dir);
+	  free(child_cell);
+	  return TSK_ERR;
+	}
+	
+	tsk_fs_name_free(fs_name);	
+	free(child_cell);
+      }
+      free(value_list_cell);
+    }      
 
     free(list_cell);
     return TSK_OK;
@@ -1085,14 +1189,106 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
     return 1;
 }
 
+static char *
+reg_value_type_str(TSK_REGFS_VALUE_TYPE type) {
+  switch(type) {
+  case TSK_REGFS_VALUE_TYPE_REGSZ:
+    return "RegSZ";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGEXPANDSZ:
+    return "RegExpandSZ";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGBIN:
+    return "RegBin";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGDWORD:
+    return "RegDWord";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGMULTISZ:
+    return "RegMultiSZ";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGQWORD:
+    return "RegQWord";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGNONE:
+    return "RegNonoe";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGBIGENDIAN:
+    return "RegBigEndian";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGLINK:
+    return "RegLink";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGRESOURCELIST:
+    return "RegResourceList";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGFULLRESOURCEDESCRIPTOR:
+    return "RegFullResourceDescriptor";
+    break;
+  case TSK_REGFS_VALUE_TYPE_REGRESOURCEREQUIREMENTLIST:
+    return "RegResourceRequirementList";
+    break;
+  default:
+    return "Unknown";
+    break;
+  }
+}
+
 static TSK_RETVAL_ENUM
 reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_CELL *cell;
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+    REGFS_CELL_VK *vk;
+    char s[512];
+    char asc[512];
+    uint32_t name_length;
+
+    memset(s, 0, 512);
+    memset(asc, 0, 512);
+
+    cell = (REGFS_CELL *)the_file->meta->content_ptr;
+    vk = (REGFS_CELL_VK *)&cell->data;
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "VK");
+
+    name_length = (tsk_gets16(fs->endian, vk->name_length));
+    if (name_length > 512 - 1) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("VK name string too long");
+      return TSK_ERR;
+    }
+    
+    if (name_length > 0) {
+      uint32_t flags = (tsk_gets32(fs->endian, vk->flags));
+      
+      if ((flags & 0x01) > 0) {
+	// ascii
+	strncpy(asc, (char *)&vk->name, name_length + 1);
+      } else {
+	// unicode
+	memcpy(s, &vk->name, name_length + 1);
+	if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
+			   512, asc, 512) != TSK_OK) {
+	  tsk_error_reset();
+	  tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+	  tsk_error_set_errstr("Failed to convert VK name string to UTF-8");
+	  return TSK_ERR;
+	}
+      }
+    } else {
+      strncpy(asc, "(default)", 512);
+    }
+    
+    tsk_fprintf(hFile, "Value Name: %s\n", asc); 
+    tsk_fprintf(hFile, "Value Type: %s\n", 
+		reg_value_type_str(tsk_getu32(fs->endian, vk->value_type)));
+    tsk_fprintf(hFile, "Value Size: %d\n", 
+		tsk_getu32(fs->endian, vk->value_length));
+    tsk_fprintf(hFile, "Value Offset: %d\n", 
+		FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, vk->value_offset));
+
     return TSK_OK;
 }
 
@@ -1204,6 +1400,13 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     } else {
 	  tsk_fprintf(hFile, "Number of subkeys: %d\n", 
 		      tsk_getu32(fs->endian, nk->num_subkeys));
+    }
+
+    if (tsk_getu32(fs->endian, nk->num_values) == 0xFFFFFFFF) {
+	  tsk_fprintf(hFile, "Number of values: %s\n", "None");
+    } else {
+	  tsk_fprintf(hFile, "Number of values: %d\n", 
+		      tsk_getu32(fs->endian, nk->num_values));
     }
 
     return TSK_OK;
