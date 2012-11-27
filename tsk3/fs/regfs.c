@@ -81,6 +81,8 @@ reg_load_cell(TSK_FS_INFO *fs, TSK_INUM_T inum) {
   uint8_t  buf[6];
   REGFS_CELL *cell;
 
+  memset(buf, 0, 6);
+
   if (inum < fs->first_inum || inum > fs->last_inum) {
     tsk_error_reset();
     tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
@@ -269,8 +271,12 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->mode = 0007777;
     a_fs_file->meta->nlink = 1;
 
-    // TODO(wb): parse the size of vk record data
-    a_fs_file->meta->size = cell->length;
+    if (cell->type == TSK_REGFS_RECORD_TYPE_VK) {
+      vk = (REG_CELL_VK *)&cell->data;
+      tsk_getu32(fs->endian, vk->value_length);
+    } else {
+      a_fs_file->meta->size = cell->length;
+    }
 
     // TODO(wb): parse security info
     a_fs_file->meta->uid = 0;
@@ -317,6 +323,8 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 }
 
 /**
+ * TODO(wb): use length field and magic header to identify 
+ *   slack space (UNALLOC) at the end of the file.
  * @return 1 on error, 0 otherwise.
  */
 uint8_t
@@ -374,6 +382,8 @@ reg_block_walk(TSK_FS_INFO * fs,
     while (blknum < a_end_blk) {
       ssize_t count;
       uint8_t data_buf[HBIN_SIZE];
+
+      memset(data_buf, 0, HBIN_SIZE);
 
       if (tsk_verbose) {
 	tsk_fprintf(stderr,
@@ -560,13 +570,8 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 	      return 1;
 	    }
 
-	    if (tsk_getu32(fs->endian, &hbin) == 0x0) { // last, empty, hbin
+	    if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
 	      please_continue = 0;
-	    } else if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
-	      tsk_error_reset();
-	      tsk_error_set_errno(TSK_ERR_FS_CORRUPT);
-	      tsk_error_set_errstr("Failed to find expected HBIN header");
-	      return 1;
 	    }
 	    current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
 
@@ -620,6 +625,8 @@ reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
     char s[512];
     uint16_t name_length;
 
+    memset(s, 0, 512);
+
     tsk_fs_name_reset(fs_name);
 
     inum = FIRST_HBIN_OFFSET;
@@ -635,12 +642,12 @@ reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
     name_length = (tsk_getu16(fs->endian, nk->name_length));
     if (name_length > 512) {
+      free(child_cell);
       tsk_error_reset();
       tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
       tsk_error_set_errstr("NK key name string too long");
       return TSK_ERR;
     }
-    memset(s, 0, sizeof(s));
     strncpy(s, (char *)nk->name, name_length);
 
     strncpy(fs_name->name, s, 512);
@@ -948,7 +955,7 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
 	    strncpy(asc, (char *)&vk->name, name_length);
 	  } else {
 	    // unicode
-	    memcpy(s, &vk->name, name_length);
+	    memcpy(s, &vk->name, name_length); // TODO(wb): this might be x2
 	    if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
 			       512, asc, 512) != TSK_OK) {
 	      free(value_list_cell);
@@ -1105,6 +1112,7 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     char asc[512];
     REGFS_CELL_COUNT cell_count;
     
+    memset(asc, 0, 512);
     memset(&cell_count, 0, sizeof(REGFS_CELL_COUNT));
 
     tsk_fprintf(hFile, "\nFILE SYSTEM INFORMATION\n");
@@ -1191,6 +1199,40 @@ reg_fscheck(TSK_FS_INFO * fs, FILE * hFile)
 }
 
 static char *
+reg_record_type_str(TSK_REGFS_RECORD_TYPE_ENUM type) {
+  switch(type) {
+  case TSK_REGFS_RECORD_TYPE_NK:
+    return "NK";
+    break;
+  case TSK_REGFS_RECORD_TYPE_VK:
+    return "VK";
+    break;
+  case TSK_REGFS_RECORD_TYPE_LF:
+    return "LF";
+    break;
+  case TSK_REGFS_RECORD_TYPE_LH:
+    return "LH";
+    break;
+  case TSK_REGFS_RECORD_TYPE_LI:
+    return "LI";
+    break;
+  case TSK_REGFS_RECORD_TYPE_RI:
+    return "RI";
+    break;
+  case TSK_REGFS_RECORD_TYPE_SK:
+    return "SK";
+    break;
+  case TSK_REGFS_RECORD_TYPE_DB:
+    return "DB";
+    break;
+  case TSK_REGFS_RECORD_TYPE_UNKNOWN:
+    return "UNKNOWN";
+    break;
+  }
+  return "UNKNOWN";
+}
+
+static char *
 reg_value_type_str(TSK_REGFS_VALUE_TYPE type) {
   switch(type) {
   case TSK_REGFS_VALUE_TYPE_REGSZ:
@@ -1266,10 +1308,10 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
       
       if ((flags & 0x01) > 0) {
 	// ascii
-	strncpy(asc, (char *)&vk->name, name_length + 1);
+	strncpy(asc, (char *)&vk->name, name_length);
       } else {
 	// unicode
-	memcpy(s, &vk->name, name_length + 1);
+	memcpy(s, &vk->name, name_length);
 	if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
 			   512, asc, 512) != TSK_OK) {
 	  tsk_error_reset();
@@ -1304,6 +1346,9 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     uint16_t name_length;
     char timeBuf[128];
 
+    memset(s, 0, 512);
+    memset(timeBuf, 0, 128);
+
     cell = (REGFS_CELL *)the_file->meta->content_ptr;
     nk = (REGFS_CELL_NK *)&cell->data;
 
@@ -1317,6 +1362,8 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       char asc[512];
       uint32_t classname_offset;
       uint32_t classname_length;
+      
+      memset(asc, 0, 512);
 
       classname_offset = (tsk_gets32(fs->endian, nk->classname_offset));
       classname_length = (tsk_gets16(fs->endian, nk->classname_length));
@@ -1422,49 +1469,206 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
 		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  unsigned int i;
+  REGFS_CELL *cell;
+  REGFS_CELL_LF *lf;
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
-    tsk_fprintf(hFile, "--------------------------------------------\n");
-    tsk_fprintf(hFile, "Record Type: %s\n", "LF");
-    return TSK_OK;
+  cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  lf = (REGFS_CELL_LF *)&cell->data;
+  
+  tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
+  tsk_fprintf(hFile, "--------------------------------------------\n");
+  tsk_fprintf(hFile, "Record Type: %s\n", "LF");
+
+  tsk_fprintf(hFile, "Number of Subkeys: %d\n", tsk_getu16(fs->endian, lf->num_offsets));
+
+  for (i = 0; i < tsk_getu16(fs->endian, lf->num_offsets); i++) {
+    TSK_INUM_T inum;
+    REGFS_CELL *child_cell;
+    REGFS_CELL_NK *nk;
+    char s[512];
+    uint16_t name_length;
+
+    memset(s, 0, 512);
+
+    inum = FIRST_HBIN_OFFSET;
+    inum += tsk_getu32(fs->endian, 
+		       (((uint8_t *)&lf->offset_list) + 
+			             i * 8));
+
+    child_cell = reg_load_cell(fs, inum);
+    if (child_cell == NULL) {
+      return TSK_ERR;
+    }
+    nk = (REGFS_CELL_NK *)&child_cell->data;
+
+    name_length = (tsk_getu16(fs->endian, nk->name_length));
+    if (name_length > 512) {
+      free(child_cell);
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("NK key name string too long");
+      return TSK_ERR;
+    }
+    strncpy(s, (char *)nk->name, name_length);
+
+    tsk_fprintf(hFile, "\n");
+    tsk_fprintf(hFile, " [%2d] Subkey name: %s\n", i, s);
+    tsk_fprintf(hFile, "      Subkey offset: %lld\n", inum);
+
+    free(child_cell);
+  }
+
+  return TSK_OK;
 }
 
 static TSK_RETVAL_ENUM
 reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
 		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  unsigned int i;
+  REGFS_CELL *cell;
+  REGFS_CELL_LH *lh;
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
-    tsk_fprintf(hFile, "--------------------------------------------\n");
-    tsk_fprintf(hFile, "Record Type: %s\n", "LH");
-    return TSK_OK;
+  cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  lh = (REGFS_CELL_LH *)&cell->data;
+  
+  tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
+  tsk_fprintf(hFile, "--------------------------------------------\n");
+  tsk_fprintf(hFile, "Record Type: %s\n", "LH");
+  
+  for (i = 0; i < tsk_getu16(fs->endian, lh->num_offsets); i++) {
+    TSK_INUM_T inum;
+    REGFS_CELL *child_cell;
+    REGFS_CELL_NK *nk;
+    char s[512];
+    uint16_t name_length;
+
+    memset(s, 0, 512);
+
+    inum = FIRST_HBIN_OFFSET;
+    inum += tsk_getu32(fs->endian, 
+		       (((uint8_t *)&lh->offset_list) + 
+			             i * 8));
+
+    child_cell = reg_load_cell(fs, inum);
+    if (child_cell == NULL) {
+      return TSK_ERR;
+    }
+    nk = (REGFS_CELL_NK *)&child_cell->data;
+
+    name_length = (tsk_getu16(fs->endian, nk->name_length));
+    if (name_length > 512) {
+      free(child_cell);
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("NK key name string too long");
+      return TSK_ERR;
+    }
+    strncpy(s, (char *)nk->name, name_length);
+
+    tsk_fprintf(hFile, "\n");
+    tsk_fprintf(hFile, " [%2d] Subkey name: %s\n", i, s);
+    tsk_fprintf(hFile, "      Subkey offset: %lld\n", inum);
+
+    free(child_cell);
+  }
+
+  return TSK_OK;
 }
 
 static TSK_RETVAL_ENUM
 reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
 		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  unsigned int i;
+  REGFS_CELL *cell;
+  REGFS_CELL_LI *li;
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
-    tsk_fprintf(hFile, "--------------------------------------------\n");
-    tsk_fprintf(hFile, "Record Type: %s\n", "LI");
-    return TSK_OK;
+  cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  li = (REGFS_CELL_LI *)&cell->data;
+  
+  tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
+  tsk_fprintf(hFile, "--------------------------------------------\n");
+  tsk_fprintf(hFile, "Record Type: %s\n", "LI");
+
+  for (i = 0; i < tsk_getu16(fs->endian, li->num_offsets); i++) {
+    TSK_INUM_T inum;
+    REGFS_CELL *child_cell;
+    REGFS_CELL_NK *nk;
+    char s[512];
+    uint16_t name_length;
+
+    memset(s, 0, 512);
+
+    inum = FIRST_HBIN_OFFSET;
+    inum += tsk_getu32(fs->endian, 
+		       (((uint8_t *)&li->offset_list) + 
+			             i * 4));
+
+    child_cell = reg_load_cell(fs, inum);
+    if (child_cell == NULL) {
+      return TSK_ERR;
+    }
+    nk = (REGFS_CELL_NK *)&child_cell->data;
+
+    name_length = (tsk_getu16(fs->endian, nk->name_length));
+    if (name_length > 512) {
+      free(child_cell);
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+      tsk_error_set_errstr("NK key name string too long");
+      return TSK_ERR;
+    }
+    strncpy(s, (char *)nk->name, name_length);
+
+    tsk_fprintf(hFile, "\n");
+    tsk_fprintf(hFile, " [%2d] Subkey name: %s\n", i, s);
+    tsk_fprintf(hFile, "      Subkey offset: %lld\n", inum);
+
+    free(child_cell);
+  }
+
+  return TSK_OK;
 }
 
 static TSK_RETVAL_ENUM
 reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  unsigned int i;
+  REGFS_CELL *cell;
+  REGFS_CELL_RI *ri;
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
-    tsk_fprintf(hFile, "--------------------------------------------\n");
-    tsk_fprintf(hFile, "Record Type: %s\n", "RI");
-    return TSK_OK;
+  cell = (REGFS_CELL *)the_file->meta->content_ptr;
+  ri = (REGFS_CELL_RI *)&cell->data;
+
+  tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
+  tsk_fprintf(hFile, "--------------------------------------------\n");
+  tsk_fprintf(hFile, "Record Type: %s\n", "RI");
+  tsk_fprintf(hFile, "Number of Subrecords: %d\n", tsk_getu16(fs->endian, ri->num_offsets));
+
+  for (i = 0; i < tsk_getu16(fs->endian, ri->num_offsets); i++) {
+    TSK_INUM_T inum;
+    REGFS_CELL *child_cell;
+
+    inum = FIRST_HBIN_OFFSET;
+    inum += tsk_getu32(fs->endian, 
+		       (((uint8_t *)&ri->offset_list) + 
+			             i * 4));
+
+    child_cell = reg_load_cell(fs, inum);
+    if (child_cell == NULL) {
+      return TSK_ERR;
+    }
+
+    tsk_fprintf(hFile, "\n");
+    tsk_fprintf(hFile, 
+		" [%2d] Subrecord type: %s\n", i, 
+		reg_record_type_str(child_cell->type));
+    tsk_fprintf(hFile, "      Subrecord offset: %lld\n", inum);
+
+    free(child_cell);
+  }
+
+  return TSK_OK;
 }
 
 static TSK_RETVAL_ENUM
@@ -1473,7 +1677,7 @@ reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
     REGFS_CELL *cell;
 	cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "SK");
     return TSK_OK;
@@ -1485,7 +1689,7 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
     REGFS_CELL *cell;
 	cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "DB");
     return TSK_OK;
@@ -1509,17 +1713,13 @@ reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
       return TSK_ERR;
     }
 
-    tsk_fprintf(hFile, "RECORD INFORMATION\n");
+    tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "Unknown (Data Record?)");
     tsk_fprintf(hFile, "Type identifier: 0x%x%x\n", *(buf + 4), *(buf + 5));
 
     return TSK_OK;
 }
-
-
-
-
 
 /**
  * Print details on a specific file to a file handle.

@@ -39,12 +39,13 @@
  *       Sets basic file system metadata in the REGFS_INFO structure.
  *     [x] fs->close
  *       Frees a REGFS_INFO structure.
- *     [x] fs->block_walk
+ *     [-] fs->block_walk
  *       Iterates through each HBIN, and calls a callback function 
  *       with the TSK_FS_BLOCK pointer for the HBIN. Only HBIN whose
  *       attributes match a set of filter flags are passed to the 
- *       callback.  Flags include ALLOC'd and UNALLOC'd.  But only ALLOC
- *       really makes any sense when we are talking about HBINs.
+ *       callback.  Flags include ALLOC'd and UNALLOC'd.  
+ *       UNALLOC'd block are found at the slack space at the end of
+ *       the Registry file, where the magic header doesn match "hbin".
  *     [x] fs->block_getflags
  *       Get the flags associated with a particular Cell.
  *       Flags include ALLOC'd and UNALLOC'd.
@@ -68,14 +69,14 @@
  *     [ ] fs->load_attrs
  *       Load data locations for a Record into runs.  This is how TSK will 
  *       access the data for a Record if you request it.
- *     [-] fs->dir_open_meta
+ *     [x] fs->dir_open_meta
  *       Allocate (with tsk_fs_dir_alloc) or reset a TSK_FS_DIR structure,
  *       set the TSK_FS_FILE substructure, and add the names of entries
  *       in the directory as TSK_FS_NAME structures (which have inode
  *       numbers).
  *     [x] fs->name_cmp
  *       Compare two key names or value names case insensitively.
- *     [-] fs->fsstat
+ *     [x] fs->fsstat
  *       Print relevant information about the Registry file.
  *     [x] fs->fscheck
  *       Unsupported.
