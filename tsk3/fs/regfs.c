@@ -35,7 +35,6 @@ nt2nano(uint64_t ntdate) {
   return (int32_t) (ntdate % 10000000);
 }
 
-
 static TSK_RETVAL_ENUM
 regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
 	       uint8_t *utf16, ssize_t utf16_length,
@@ -172,15 +171,82 @@ reg_load_cell(TSK_FS_INFO *fs, TSK_INUM_T inum) {
 
 /** 
  * Load the attributes.
+ * This only makes sense for VKRecords (values).
+ * All other record types have no attributes.
+ * Because Blocks == HBINs, and values are found with
+ *   length as a multiple of 8 bytes, all values must
+ *   be stored as resident attributes.
+ * A VKRecord will have two attributes:
+ *   ID(0) - the value type as a DWORD. See @TSK_REGFS_VALUE_TYPE.
+ *   ID(1) - the value data
  * @param a_fs_file File to load attributes for.
  * @returns 1 on error
  */
 static uint8_t
 reg_load_attrs(TSK_FS_FILE * a_fs_file)
 {
-  // TODO(wb): check if allocated
+    TSK_FS_INFO *fs;
+    TSK_FS_ATTR *type_attr = NULL;
+    TSK_FS_META *fs_meta;
+    REGFS_CELL *cell;
+    REGFS_CELL_VK *vk;
 
-    a_fs_file->meta->attr = 0;
+    if (a_fs_file == NULL || 
+	 a_fs_file->meta == NULL || 
+	 a_fs_file->meta->content_ptr == NULL) {
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("regfs_load_attrs: parameter is NULL");
+        return 1;
+    }
+
+    fs_meta = a_fs_file->meta;
+    fs = a_fs_file->fs_info;
+    cell = (REGFS_CELL *)fs_meta->content_ptr;
+
+    if (fs_meta->attr != NULL &&
+         fs_meta->attr_state == TSK_FS_META_ATTR_STUDIED) {
+        return 0;
+    }
+    else if (fs_meta->attr_state == TSK_FS_META_ATTR_ERROR) {
+        return 1;
+    }
+    else if (fs_meta->attr != NULL) {
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+    }
+    else if (fs_meta->attr == NULL) {
+        fs_meta->attr = tsk_fs_attrlist_alloc();
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+    }
+    
+    if (cell->type != TSK_REGFS_RECORD_TYPE_VK) {
+      fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
+      return 0;
+    }
+    vk = (REGFS_CELL_VK *)&cell->data;
+
+    if ((type_attr =
+	 tsk_fs_attrlist_getnew(fs_meta->attr,
+				TSK_FS_ATTR_RES)) == NULL) {
+      tsk_fs_attrlist_markunused(fs_meta->attr);
+      return 1;
+    }
+
+    type_attr->fs_file = a_fs_file;
+    type_attr->flags = TSK_FS_ATTR_INUSE | TSK_FS_ATTR_RES;
+    type_attr->name = NULL;
+    type_attr->name_size = 0;
+    type_attr->type = TSK_FS_ATTR_TYPE_REG_VALUE_TYPE;
+    type_attr->id = 0;
+    type_attr->size = 4;
+    
+    type_attr->rd.buf = (uint8_t *)tsk_malloc(4);
+    if (type_attr->rd.buf == NULL) {
+      tsk_fs_attrlist_markunused(fs_meta->attr);
+      return 1;
+    }
+    *((uint32_t *)(type_attr->rd.buf)) = tsk_getu32(fs->endian, vk->value_type);
+    type_attr->rd.offset = cell->inum + 0x10;
+
     a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
     return 0;
 }
@@ -272,8 +338,8 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->nlink = 1;
 
     if (cell->type == TSK_REGFS_RECORD_TYPE_VK) {
-      vk = (REG_CELL_VK *)&cell->data;
-      tsk_getu32(fs->endian, vk->value_length);
+      REGFS_CELL_VK *vk = (REGFS_CELL_VK *)&cell->data;
+      a_fs_file->meta->size = tsk_getu32(fs->endian, vk->value_length);
     } else {
       a_fs_file->meta->size = cell->length;
     }
@@ -312,9 +378,7 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 
     a_fs_file->meta->link = 0;
 
-    // TODO(wb):
-    // only really relevant for VK records
-    if (reg_load_attrs(a_fs_file) != TSK_OK) {
+    if (reg_load_attrs(a_fs_file) != 0) {
       tsk_fs_file_close(a_fs_file);
       return TSK_ERR;
     }
@@ -589,14 +653,10 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 static TSK_FS_ATTR_TYPE_ENUM
 reg_get_default_attr_type(const TSK_FS_FILE * a_file)
 {
-    if ((a_file == NULL) || (a_file->meta == NULL))
-        return TSK_FS_ATTR_TYPE_DEFAULT;
-
-    /* Use DATA for files and IDXROOT for dirs */
-    if (a_file->meta->type == TSK_FS_META_TYPE_DIR)
-        return TSK_FS_ATTR_TYPE_NTFS_IDXROOT;
-    else
-        return TSK_FS_ATTR_TYPE_NTFS_DATA;
+  if ((a_file == NULL) || (a_file->meta == NULL)) {
+    return TSK_FS_ATTR_TYPE_DEFAULT;
+  }
+  return TSK_FS_ATTR_TYPE_NTFS_DATA;
 }
 
 static TSK_RETVAL_ENUM

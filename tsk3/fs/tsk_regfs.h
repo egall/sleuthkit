@@ -1,3 +1,4 @@
+
 /*
 ** The Sleuth Kit 
 **
@@ -63,7 +64,7 @@
  *       tsk_fs_meta_alloc.  This structure may also be reset by 
  *       tsk_fs_meta_reset.  Then, set relevant metadata for the
  *       TSK_FS_META substructure.
- *     [ ] fs->get_default_attr_type
+ *     [x] fs->get_default_attr_type
  *       Given a TSK_FS_FILE, return the default attribute type.
  *       This is probably TSK_FS_ATTR_TYPE_DEFAULT.
  *     [ ] fs->load_attrs
