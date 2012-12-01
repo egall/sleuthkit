@@ -108,6 +108,10 @@ reg_load_cell(TSK_FS_INFO *fs, TSK_INUM_T inum) {
     len = (tsk_getu32(fs->endian, buf));
   }
 
+  if (tsk_verbose && len > 0x4000) {
+    tsk_fprintf(stderr, "Loading a cell with length : %d", len);
+  }
+
   // this may be a few bytes too long.
   cell = (REGFS_CELL *)tsk_malloc(sizeof(REGFS_CELL) + len);
   if (cell == NULL) {
@@ -224,6 +228,9 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     }
     vk = (REGFS_CELL_VK *)&cell->data;
 
+    // do attribute TSK_FS_ATTR_TYPE_REG_VALUE_TYPE
+    //   which is an attribute that describes the type
+    //   of a value.
     if ((type_attr =
 	 tsk_fs_attrlist_getnew(fs_meta->attr,
 				TSK_FS_ATTR_RES)) == NULL) {
@@ -245,6 +252,301 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
       return 1;
     }
     *((uint32_t *)(type_attr->rd.buf)) = tsk_getu32(fs->endian, vk->value_type);
+    type_attr->rd.offset = cell->inum + 0x10;
+
+
+    TSK_FS_ATTR *data_attr;
+    TSK_REGFS_VALUE_TYPE data_type;
+    uint32_t data_length;
+    uint8_t *data_data;
+
+    // do attribute TSK_FS_ATTR_TYPE_NTFS_DATA
+    //   which is an attribute that contains the value data
+    if ((data_attr =
+	 tsk_fs_attrlist_getnew(fs_meta->attr,
+				TSK_FS_ATTR_RES)) == NULL) {
+      tsk_fs_attrlist_markunused(fs_meta->attr);
+      return 1;
+    }
+
+    data_attr->fs_file = a_fs_file;
+    data_attr->flags = TSK_FS_ATTR_INUSE | TSK_FS_ATTR_RES;
+    data_attr->name = NULL;
+    data_attr->name_size = 0;
+    data_attr->type = TSK_FS_ATTR_TYPE_NTFS_DATA;
+    data_attr->id = 0;
+
+    data_type = tsk_getu32(fs->endian, vk->value_type);
+    data_length = tsk_getu32(fs->endian, vk->value_length);
+    switch(data_type) {
+    case TSK_REGFS_VALUE_TYPE_REGSZ:
+      /* fall through intended */
+    case TSK_REGFS_VALUE_TYPE_REGEXPANDSZ:
+      /* fall through intended */
+    case TSK_REGFS_VALUE_TYPE_REGBIN:
+      /* fall through intended */
+    case TSK_REGFS_VALUE_TYPE_REGNONE:
+      /* fall through intended */
+    case TSK_REGFS_VALUE_TYPE_REGMULTISZ:
+      if (data_length < 5) {
+	// stored in the offset field
+	data_data = (uint8_t *)tsk_malloc(data_length);
+	if (data_data == NULL) {
+	  tsk_fs_attrlist_markunused(fs_meta->attr);
+	  return 1;
+	}
+	memcpy(data_data, &vk->value_offset, data_length);
+	
+	data_attr->size = data_length;
+	data_attr->rd.buf = data_data;
+	data_attr->rd.offset = cell->inum + 0x8;
+      } else if (data_length >= 0x80000000) {
+	// stored in the offset field
+	data_length -= 0x80000000;
+	data_data = (uint8_t *)tsk_malloc(data_length);
+	if (data_data == NULL) {
+	  tsk_fs_attrlist_markunused(fs_meta->attr);
+	  return 1;
+	}
+	memcpy(data_data, &vk->value_offset, data_length);
+	
+	data_attr->size = data_length;
+	data_attr->rd.buf = data_data;
+	data_attr->rd.offset = cell->inum + 0x8;
+      } else if (data_length < 0x3fd8) {
+	// stored in a data record
+	TSK_INUM_T data_offset = tsk_getu32(fs->endian, vk->value_offset) + 
+	  FIRST_HBIN_OFFSET;
+	REGFS_CELL *data_cell = reg_load_cell(fs, data_offset);
+	if (data_cell == NULL) {
+	  tsk_fs_attrlist_markunused(fs_meta->attr);
+	  return 1;	  
+	}
+	data_data = (uint8_t *)tsk_malloc(data_length);
+	if (data_data == NULL) {
+	  tsk_fs_attrlist_markunused(fs_meta->attr);
+	  return 1;
+	}
+	memcpy(data_data, &data_cell->data, data_length);
+	
+	data_attr->size = data_length;
+	data_attr->rd.buf = data_data;
+	data_attr->rd.offset = data_offset + 0x4;
+      } else {
+	// else data_length >= 0x3fd8 && data_length < 0x8000000
+	//   and is stored using DBRecords
+	TSK_INUM_T db_inum;
+	REGFS_CELL *db_cell;
+	
+	db_inum = tsk_getu32(fs->endian, vk->value_offset);
+	db_inum += FIRST_HBIN_OFFSET;
+	db_cell = reg_load_cell(fs, db_inum);
+	if (db_cell == NULL) {
+	  tsk_fs_attrlist_markunused(fs_meta->attr);
+	  return 1;
+	}
+	
+	if (cell->type != TSK_REGFS_RECORD_TYPE_DB) {
+	  // stored as a normal data block, in the cell
+	  data_data = (uint8_t *)tsk_malloc(data_length);
+	  if (data_data == NULL) {
+	    free(db_cell);
+	    tsk_fs_attrlist_markunused(fs_meta->attr);
+	    return 1;
+	  }
+	  
+	  if (data_length > db_cell->length - 4) {
+	    free(db_cell);
+	    tsk_fs_attrlist_markunused(fs_meta->attr);
+	    tsk_error_reset();
+	    tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	    tsk_error_set_errstr("Data size incorrect.");
+	    return 1;
+	  }
+	  memcpy(data_data, &db_cell->data + 4, data_length);
+	  data_attr->rd.offset = db_inum + 4;
+	} else {
+	  // this is a DB block
+	  REGFS_CELL_DB *db;
+	  TSK_INUM_T indirect_inum;
+	  REGFS_CELL *indirect_cell;
+	  REGFS_CELL_DB_INDIRECT *indirect;
+	  ssize_t read;
+	  unsigned int i;
+	  
+	  data_data = (uint8_t *)tsk_malloc(data_length);
+	  if (data_data == NULL) {
+	    free(db_cell);
+	    tsk_fs_attrlist_markunused(fs_meta->attr);
+	    return 1;
+	  }
+	  
+	  db = (REGFS_CELL_DB *)&cell->data;
+	  indirect_inum = tsk_getu32(fs->endian, db->offset);
+	  indirect_inum += FIRST_HBIN_OFFSET;
+	  
+	  indirect_cell = reg_load_cell(fs, indirect_inum);
+	  if (indirect_cell == NULL) {
+	    free(data_data);
+	    free(db_cell);
+	    tsk_fs_attrlist_markunused(fs_meta->attr);
+	    return 1;
+	  }
+	  indirect = (REGFS_CELL_DB_INDIRECT *)&indirect_cell->data;
+	  
+	  i = 0;
+	  while (read < data_length) {
+	    TSK_INUM_T data_inum;
+	    REGFS_CELL *data_cell;
+	    ssize_t data_chunk_length;
+	    
+	    if (i >= (indirect_cell->length - 4) / 4) {
+	      free(db_cell);
+	      free(indirect_cell);
+	      tsk_fs_attrlist_markunused(fs_meta->attr);
+	      tsk_error_reset();
+	      tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	      tsk_error_set_errstr("Required offsets overran DB "
+				   "indirect block array.");
+	      return 1;
+	    }
+	    
+	    data_inum = tsk_getu32(fs->endian, 
+				   ((uint8_t *)&indirect->offset_list) + i * 4);
+	    data_inum += FIRST_HBIN_OFFSET;
+	    
+	    if (i == 0) {
+	      data_attr->rd.offset = data_inum + 4;
+	    }
+	    
+	    data_cell = reg_load_cell(fs, data_inum);
+	    if (data_cell == NULL) {
+	      free(data_data);
+	      free(db_cell);
+	      free(indirect_cell);
+	      tsk_fs_attrlist_markunused(fs_meta->attr);
+	      return 1;
+	    }
+	    
+	    data_chunk_length = cell->length - 4;
+	    if (data_length - read < 0x3fd8) {
+	      data_chunk_length = data_length - read;
+	    }
+	    if (data_chunk_length < cell->length - 4) {
+	      data_chunk_length = cell->length - 4;
+	    }
+	    
+	    memcpy(data_data + read, ((uint8_t *)&data_cell->data) + 4, 
+		   data_chunk_length);
+	    read += data_chunk_length;
+	    
+	    free(data_cell);
+	    i += 1;
+	  }
+	  free(indirect_cell);
+	}
+	
+	data_attr->size = data_length;
+	data_attr->rd.buf = data_data;
+      }
+      
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGDWORD:
+      // stored in the offset field
+      if (data_length >= 0x8000000) {
+	data_length -= 0x80000000;
+      }
+      data_data = (uint8_t *)tsk_malloc(data_length);
+      if (data_data == NULL) {
+	tsk_fs_attrlist_markunused(fs_meta->attr);
+	return 1;
+      }
+      memcpy(data_data, &vk->value_offset, data_length);
+      
+      data_attr->size = data_length;
+      data_attr->rd.buf = data_data;
+      data_attr->rd.offset = cell->inum + 0x8;
+
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGQWORD:
+      if (data_length >= 0x8000000) {
+	data_length -= 0x80000000;
+      }
+      1 == 1; // TODO(wb): why does Clang require a statement here?
+      // stored in a data record
+      TSK_INUM_T data_offset;
+      REGFS_CELL *data_cell;
+      data_length = 0x8;
+
+      data_offset = tsk_getu32(fs->endian, vk->value_offset);
+      data_offset += FIRST_HBIN_OFFSET;
+
+      data_cell = reg_load_cell(fs, data_offset);
+      if (data_cell == NULL) {
+	tsk_fs_attrlist_markunused(fs_meta->attr);
+	return 1;	  
+      }
+      data_data = (uint8_t *)tsk_malloc(data_length);
+      if (data_data == NULL) {
+	tsk_fs_attrlist_markunused(fs_meta->attr);
+	return 1;
+      }
+      memcpy(data_data, &data_cell->data, data_length);
+      
+      data_attr->size = data_length;
+      data_attr->rd.buf = data_data;
+      data_attr->rd.offset = data_offset + 0x4;
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGBIGENDIAN:
+      /* unsupported */
+      // TODO(wb): implement this
+      data_attr->size = 0;
+      data_attr->rd.buf = NULL;
+      data_attr->rd.offset = 0x0;
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGLINK:
+      /* unsupported */
+      // TODO(wb): implement this
+      data_attr->size = 0;
+      data_attr->rd.buf = NULL;
+      data_attr->rd.offset = 0x0;
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGRESOURCELIST:
+      /* unsupported */
+      // TODO(wb): implement this
+      data_attr->size = 0;
+      data_attr->rd.buf = NULL;
+      data_attr->rd.offset = 0x0;
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGFULLRESOURCEDESCRIPTOR:
+      /* unsupported */
+      // TODO(wb): implement this
+      data_attr->size = 0;
+      data_attr->rd.buf = NULL;
+      data_attr->rd.offset = 0x0;
+      break;
+    case TSK_REGFS_VALUE_TYPE_REGRESOURCEREQUIREMENTLIST:
+      /* unsupported */
+      // TODO(wb): implement this
+      data_attr->size = 0;
+      data_attr->rd.buf = NULL;
+      data_attr->rd.offset = 0x0;
+      break;
+    default:
+      data_attr->size = 0;
+      data_attr->rd.buf = NULL;
+      data_attr->rd.offset = 0x0;
+      break;
+    }
+
+    type_attr->rd.buf = (uint8_t *)tsk_malloc(4);
+    if (type_attr->rd.buf == NULL) {
+      tsk_fs_attrlist_markunused(fs_meta->attr);
+      return 1;
+    }
+    *((uint32_t *)(type_attr->rd.buf)) = tsk_getu32(fs->endian, 
+						    vk->value_type);
+    type_attr->size = 4;
     type_attr->rd.offset = cell->inum + 0x10;
 
     a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
@@ -299,6 +601,10 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
         return 1;
     }
     a_fs_file->fs_info = fs;
+
+    if (tsk_verbose) {
+      tsk_fprintf(stderr, "Reading inode: %d\n", inum);
+    }
 
     // we will always reset the meta field
     // because this is simple.
@@ -380,10 +686,10 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 
     if (reg_load_attrs(a_fs_file) != 0) {
       tsk_fs_file_close(a_fs_file);
-      return TSK_ERR;
+      return 1;
     }
 
-    return TSK_OK;
+    return 0;
 }
 
 /**
@@ -1385,10 +1691,16 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
     }
     
     tsk_fprintf(hFile, "Value Name: %s\n", asc); 
+    // TODO(wb): get and use attribute here, instead
     tsk_fprintf(hFile, "Value Type: %s\n", 
 		reg_value_type_str(tsk_getu32(fs->endian, vk->value_type)));
-    tsk_fprintf(hFile, "Value Size: %d\n", 
-		tsk_getu32(fs->endian, vk->value_length));
+
+    // TODO(wb): get and use attribute here, instead
+    uint32_t value_size = tsk_getu32(fs->endian, vk->value_length);
+    if (value_size >= 0x8000000) {
+      value_size -= 0x80000000;
+    }
+    tsk_fprintf(hFile, "Value Size: %d\n", value_size);
     tsk_fprintf(hFile, "Value Offset: %d\n", 
 		FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, vk->value_offset));
 

@@ -1,4 +1,3 @@
-
 /*
 ** The Sleuth Kit 
 **
@@ -118,11 +117,11 @@ extern "C" {
   typedef enum TSK_REGFS_RECORD_TYPE_ENUM TSK_REGFS_RECORD_TYPE_ENUM;
 
   typedef struct REGFS_CELL {
-    TSK_INUM_T inum;  ///< Inode number (address) of cell.
+    TSK_INUM_T inum; ///< Inode number (address) of cell.
     uint8_t  is_allocated; ///< 1 if active, 0 otherwise.
     TSK_REGFS_RECORD_TYPE_ENUM type;  ///< The type of the contents of the cell.
-    uint32_t length; ///< Length of cell, including all headers.
-    uint8_t data; ///< The data of the cell, with length `.length`. Contains the entire data, including Size, Magic, then Data.x
+    uint32_t length; ///< Length of cell (not this structure), including all headers.
+    uint8_t data;    ///< The data of the cell, with length `.length`. Contains the entire data, including Size, Magic, then Data.
   } REGFS_CELL;
 
     typedef struct REGFS_CELL_NK {
@@ -151,62 +150,76 @@ extern "C" {
     } REGFS_CELL_NK;
 
   typedef enum TSK_REGFS_VALUE_TYPE {
-    TSK_REGFS_VALUE_TYPE_REGSZ = 0x0001,
-    TSK_REGFS_VALUE_TYPE_REGEXPANDSZ = 0x0002,
-    TSK_REGFS_VALUE_TYPE_REGBIN = 0x0003,
-    TSK_REGFS_VALUE_TYPE_REGDWORD = 0x0004,
-    TSK_REGFS_VALUE_TYPE_REGMULTISZ = 0x0007,
-    TSK_REGFS_VALUE_TYPE_REGQWORD = 0x000B,
-    TSK_REGFS_VALUE_TYPE_REGNONE = 0x0000,
-    TSK_REGFS_VALUE_TYPE_REGBIGENDIAN = 0x0005,
-    TSK_REGFS_VALUE_TYPE_REGLINK = 0x0006,
-    TSK_REGFS_VALUE_TYPE_REGRESOURCELIST = 0x0008,
-    TSK_REGFS_VALUE_TYPE_REGFULLRESOURCEDESCRIPTOR = 0x0009,
-    TSK_REGFS_VALUE_TYPE_REGRESOURCEREQUIREMENTLIST = 0x000A
+    TSK_REGFS_VALUE_TYPE_REGNONE = 0x0,
+    TSK_REGFS_VALUE_TYPE_REGSZ = 0x1,
+    TSK_REGFS_VALUE_TYPE_REGEXPANDSZ = 0x2,
+    TSK_REGFS_VALUE_TYPE_REGBIN = 0x3,
+    TSK_REGFS_VALUE_TYPE_REGDWORD = 0x4,
+    TSK_REGFS_VALUE_TYPE_REGBIGENDIAN = 0x5,
+    TSK_REGFS_VALUE_TYPE_REGLINK = 0x6,
+    TSK_REGFS_VALUE_TYPE_REGMULTISZ = 0x7,
+    TSK_REGFS_VALUE_TYPE_REGRESOURCELIST = 0x8,
+    TSK_REGFS_VALUE_TYPE_REGFULLRESOURCEDESCRIPTOR = 0x9,
+    TSK_REGFS_VALUE_TYPE_REGRESOURCEREQUIREMENTLIST = 0xA,
+    TSK_REGFS_VALUE_TYPE_REGQWORD = 0xB,
   } TSK_REGFS_VALUE_TYPE;
 
   typedef struct REGFS_CELL_VK {
-/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
-/*  0x00 */  uint8_t magic[0x2];    ///< "vk"
+/* -0x04 */  uint8_t size[0x4];         ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];        ///< "vk"
 /*  0x02 */  uint8_t name_length[0x2];
 /*  0x04 */  uint8_t value_length[0x4];
 /*  0x08 */  uint8_t value_offset[0x4]; ///< relative to first hbin
-/*  0x0C */  uint8_t value_type[0x4]; ///< possible values: TSK_REGFS_VALUE_TYPE
+/*  0x0C */  uint8_t value_type[0x4];   ///< possible values: TSK_REGFS_VALUE_TYPE
 /*  0x10 */  uint8_t flags[0x4];
 /*  0x14 */  uint8_t name[0x4];
   } REGFS_CELL_VK;
 
     typedef struct REGFS_CELL_LF {
-/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
-/*  0x00 */  uint8_t magic[0x2];    ///< "lf"
+/* -0x04 */  uint8_t size[0x4];        ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];       ///< "lf"
 /*  0x02 */  uint8_t num_offsets[0x2];
 /*  0x04 */  uint8_t offset_list[0x8]; ///< Array of {u32 relative offset, u32 hash} from the first HBIN.
       /* the array will extend here... */
     } REGFS_CELL_LF;
 
     typedef struct REGFS_CELL_LH {
-/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
-/*  0x00 */  uint8_t magic[0x2];    ///< "lh"
+/* -0x04 */  uint8_t size[0x4];        ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];       ///< "lh"
 /*  0x02 */  uint8_t num_offsets[0x2];
 /*  0x04 */  uint8_t offset_list[0x8]; ///< Array of {u32 relative offset, u32 hash} from the first HBIN.
       /* the array will extend here... */
     } REGFS_CELL_LH;
 
     typedef struct REGFS_CELL_RI {
-/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
-/*  0x00 */  uint8_t magic[0x2];    ///< "ri"
+/* -0x04 */  uint8_t size[0x4];        ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];       ///< "ri"
 /*  0x02 */  uint8_t num_offsets[0x2];
 /*  0x04 */  uint8_t offset_list[0x4]; ///< Array of u32 relative offsets from the first HBIN.
       /* the array will extend here... */
     } REGFS_CELL_RI;
 
     typedef struct REGFS_CELL_LI {
-/* -0x04 */  uint8_t size[0x4];    ///< negative if allocated
-/*  0x00 */  uint8_t magic[0x2];    ///< "li"
+/* -0x04 */  uint8_t size[0x4];        ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];       ///< "li"
 /*  0x02 */  uint8_t num_offsets[0x2];
 /*  0x04 */  uint8_t offset_list[0x4]; ///< Array of u32 relative offsets from the first HBIN.
       /* the array will extend here... */
     } REGFS_CELL_LI;
+
+    typedef struct REGFS_CELL_DB {
+/* -0x04 */  uint8_t size[0x4];   ///< negative if allocated
+/*  0x00 */  uint8_t magic[0x2];  ///< "db"
+/*  0x02 */  uint8_t unused[0x2];
+/*  0x04 */  uint8_t offset[0x4]; ///< Offset to a DBIndirect block relative to the first HBIN.
+    } REGFS_CELL_DB;
+
+    typedef struct REGFS_CELL_DB_INDIRECT {
+/* -0x04 */  uint8_t size[0x4];        ///< negative if allocated
+/*  0x00 */  uint8_t offset_list[0x4]; ///< Array of u32 relative offsets from the first HBIN to data records of size up to 0x3fd8.
+      /* the array will extend here... */
+    } REGFS_CELL_DB_INDIRECT;
+
 
 
   /** \internal
