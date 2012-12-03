@@ -37,8 +37,8 @@ nt2nano(uint64_t ntdate) {
 
 static TSK_RETVAL_ENUM
 regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
-	       uint8_t *utf16, ssize_t utf16_length,
-	       char *utf8, ssize_t utf8_length) {
+               uint8_t *utf16, ssize_t utf16_length,
+               char *utf8, ssize_t utf8_length) {
   UTF16 *name16;
   UTF8 *name8;
   int retVal;
@@ -46,15 +46,15 @@ regfs_utf16to8(TSK_ENDIAN_ENUM endian, char *error_class,
   name16 = (UTF16 *) utf16;
   name8 = (UTF8 *) utf8;
   retVal = tsk_UTF16toUTF8(endian, 
-			   (const UTF16 **) &name16,
-			   (UTF16 *) ((uintptr_t) name16 + utf16_length),
-			   &name8,
-			   (UTF8 *) ((uintptr_t) name8 + utf8_length),
-			   TSKlenientConversion);
+                           (const UTF16 **) &name16,
+                           (UTF16 *) ((uintptr_t) name16 + utf16_length),
+                           &name8,
+                           (UTF8 *) ((uintptr_t) name8 + utf8_length),
+                           TSKlenientConversion);
   if (retVal != TSKconversionOK) {
     if (tsk_verbose)
       tsk_fprintf(stderr, "Error converting %s to UTF8: %d",
-		  error_class, retVal);
+                  error_class, retVal);
     *name8 = '\0';
   }
   else if ((uintptr_t) name8 >= (uintptr_t) utf8 + utf8_length) {
@@ -128,7 +128,7 @@ reg_load_cell(TSK_FS_INFO *fs, TSK_INUM_T inum) {
   uint32_t read = 0;
   while (cell->length - read > 0) {
     count = tsk_fs_read(fs, (cell->inum) + read, 
-			(char *) ((&cell->data) + read), cell->length - read);
+                        (char *) ((&cell->data) + read), cell->length - read);
     if (count == -1) {
       free(cell);
       tsk_error_reset();
@@ -199,8 +199,8 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     uint8_t *data_data;
 
     if (a_fs_file == NULL || 
-	 a_fs_file->meta == NULL || 
-	 a_fs_file->meta->content_ptr == NULL) {
+         a_fs_file->meta == NULL || 
+         a_fs_file->meta->content_ptr == NULL) {
         tsk_error_set_errno(TSK_ERR_FS_ARG);
         tsk_error_set_errstr("regfs_load_attrs: parameter is NULL");
         return 1;
@@ -240,21 +240,21 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     //   which is an attribute that describes the type
     //   of a value.
     if ((type_attr =
-	 tsk_fs_attrlist_getnew(fs_meta->attr,
-				TSK_FS_ATTR_RES)) == NULL) {
+         tsk_fs_attrlist_getnew(fs_meta->attr,
+                                TSK_FS_ATTR_RES)) == NULL) {
       tsk_fs_attrlist_markunused(fs_meta->attr);
       return 1;
     }
 
     tsk_fs_attr_set_str(a_fs_file, type_attr,
-			NULL, TSK_FS_ATTR_TYPE_REG_VALUE_TYPE,
-			0, &(vk->value_type), 4);
+                        NULL, TSK_FS_ATTR_TYPE_REG_VALUE_TYPE,
+                        0, &(vk->value_type), 4);
 
     // do attribute TSK_FS_ATTR_TYPE_NTFS_DATA
     //   which is an attribute that contains the value data
     if ((data_attr =
-	 tsk_fs_attrlist_getnew(fs_meta->attr,
-				TSK_FS_ATTR_RES)) == NULL) {
+         tsk_fs_attrlist_getnew(fs_meta->attr,
+                                TSK_FS_ATTR_RES)) == NULL) {
       tsk_fs_attrlist_markunused(fs_meta->attr);
       return 1;
     }
@@ -272,13 +272,13 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     else if (data_length < 5 || data_length > 0x80000000) {
       // stored in the offset field
       if (data_length > 0x80000000) {
-	data_length -= 0x80000000;
+        data_length -= 0x80000000;
       }
 
       data_data = (uint8_t *)tsk_malloc(data_length);
       if (data_data == NULL) {
-	tsk_fs_attrlist_markunused(fs_meta->attr);
-	return 1;
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+        return 1;
       }
       memcpy(data_data, &vk->value_offset, data_length);
     } else if (data_length < 0x3fd8) {
@@ -291,16 +291,26 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
 
       data_cell = reg_load_cell(fs, data_offset);
       if (data_cell == NULL) {
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+        return 1;         
+      }
+
+      if (data_length > data_cell->length - 4) {
+	free(data_cell);
 	tsk_fs_attrlist_markunused(fs_meta->attr);
-	return 1;	  
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+	tsk_error_set_errstr("Data size too large for "
+			     "data cell.");
+	return 1;
       }
 
       data_data = (uint8_t *)tsk_malloc(data_length);
       if (data_data == NULL) {
-	tsk_fs_attrlist_markunused(fs_meta->attr);
-	return 1;
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+        return 1;
       }
-      memcpy(data_data, &data_cell->data, data_length);
+      memcpy(data_data, &data_cell->data + 4, data_length);
       free(data_cell);
     } else {
       // else data_length >= 0x3fd8 && data_length < 0x8000000
@@ -314,130 +324,129 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
 
       db_cell = reg_load_cell(fs, db_inum);
       if (db_cell == NULL) {
-	tsk_fs_attrlist_markunused(fs_meta->attr);
-	return 1;
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+        return 1;
       }
       
       if (db_cell->type != TSK_REGFS_RECORD_TYPE_DB) {
-	// stored as a large, continuous data block, in the cell
+        // stored as a large, continuous data block, in the cell
 
-	if (data_length > db_cell->length - 4) {
-	  free(db_cell);
-	  tsk_fs_attrlist_markunused(fs_meta->attr);
-	  tsk_error_reset();
-	  tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-	  tsk_error_set_errstr("Data size too large for "
-			       "single large data block.");
-	  return 1;
-	}
+        if (data_length > db_cell->length - 4) {
+          free(db_cell);
+          tsk_fs_attrlist_markunused(fs_meta->attr);
+          tsk_error_reset();
+          tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+          tsk_error_set_errstr("Data size too large for "
+                               "single large data block.");
+          return 1;
+        }
 
-	data_data = (uint8_t *)tsk_malloc(data_length);
-	if (data_data == NULL) {
-	  free(db_cell);
-	  tsk_fs_attrlist_markunused(fs_meta->attr);
-	  return 1;
-	}
-	
-	memcpy(data_data, &db_cell->data + 4, data_length);
+        data_data = (uint8_t *)tsk_malloc(data_length);
+        if (data_data == NULL) {
+          free(db_cell);
+          tsk_fs_attrlist_markunused(fs_meta->attr);
+          return 1;
+        }
+        
+        memcpy(data_data, &db_cell->data + 4, data_length);
       } else {
-	// this is a DB block
-	REGFS_CELL_DB *db;
-	TSK_INUM_T indirect_inum;
-	REGFS_CELL *indirect_cell;
-	REGFS_CELL_DB_INDIRECT *indirect;
-	ssize_t read;
-	unsigned int i;
-	
-	if (tsk_verbose && data_length > 1024 * 64) {
-	  // At least one MSDN page lists the max value size as limited
-	  //   only by available memory in the latest format:
-	  // msdn.microsoft.com/en-us/library/
-	  //    windows/desktop/ms724872(v=vs.85).aspx
-	  // Another lists the max size for all values of a key to be 64K:
-	  // support.microsoft.com/kb/256986
-	  tsk_fprintf(stderr, "Loading a value with size great than 64K.\n");
-	}
+        // this is a DB block
+        REGFS_CELL_DB *db;
+        TSK_INUM_T indirect_inum;
+        REGFS_CELL *indirect_cell;
+        REGFS_CELL_DB_INDIRECT *indirect;
+        ssize_t read;
+        unsigned int i;
+        
+        if (tsk_verbose && data_length > 1024 * 64) {
+          // At least one MSDN page lists the max value size as limited
+          //   only by available memory in the latest format:
+          // msdn.microsoft.com/en-us/library/
+          //    windows/desktop/ms724872(v=vs.85).aspx
+          // Another lists the max size for all values of a key to be 64K:
+          // support.microsoft.com/kb/256986
+          tsk_fprintf(stderr, "Loading a value with size great than 64K.\n");
+        }
 
-	data_data = (uint8_t *)tsk_malloc(data_length);
-	if (data_data == NULL) {
-	  free(db_cell);
-	  tsk_fs_attrlist_markunused(fs_meta->attr);
-	  return 1;
-	}
-	
-	db = (REGFS_CELL_DB *)&db_cell->data;
-	indirect_inum = tsk_getu32(fs->endian, db->offset);
-	indirect_inum += FIRST_HBIN_OFFSET;
-	
-	indirect_cell = reg_load_cell(fs, indirect_inum);
-	if (indirect_cell == NULL) {
-	  free(data_data);
-	  free(db_cell);
-	  tsk_fs_attrlist_markunused(fs_meta->attr);
-	  return 1;
-	}
-	indirect = (REGFS_CELL_DB_INDIRECT *)&indirect_cell->data;
-	
-	i = 0;
-	read = 0;
-	while (read < data_length) {
-	  TSK_INUM_T data_inum;
-	  REGFS_CELL *data_cell;
-	  ssize_t data_chunk_length;
-	  
-	  if (i >= (indirect_cell->length - 4) / 4) {
-	    free(db_cell);
-	    free(indirect_cell);
-	    tsk_fs_attrlist_markunused(fs_meta->attr);
-	    tsk_error_reset();
-	    tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-	    tsk_error_set_errstr("Required offsets overran DB "
-				 "indirect block array.");
-	    return 1;
-	  }
-	  
-	  data_inum = tsk_getu32(fs->endian, 
-			        ((uint8_t *)&indirect->offset_list) + i * 4);
-	  data_inum += FIRST_HBIN_OFFSET;
-	  
-	  if (i == 0) {
-	    data_attr->rd.offset = data_inum + 4;
-	  }
-	  
-	  data_cell = reg_load_cell(fs, data_inum);
-	  if (data_cell == NULL) {
-	    free(data_data);
-	    free(db_cell);
-	    free(indirect_cell);
-	    tsk_fs_attrlist_markunused(fs_meta->attr);
-	    return 1;
-	  }
-	  
-	  data_chunk_length = data_cell->length - 4;
-	  if (data_length - read < data_cell->length - 4) {
-	    data_chunk_length = data_length - read;
-	  }
-	  
-	  memcpy(data_data + read, ((uint8_t *)&data_cell->data) + 4, 
-		 data_chunk_length);
-	  read += data_chunk_length;
-	  
-	  free(data_cell);
-	  i += 1;
-	}
+        data_data = (uint8_t *)tsk_malloc(data_length);
+        if (data_data == NULL) {
+          free(db_cell);
+          tsk_fs_attrlist_markunused(fs_meta->attr);
+          return 1;
+        }
+        
+        db = (REGFS_CELL_DB *)&db_cell->data;
+        indirect_inum = tsk_getu32(fs->endian, db->offset);
+        indirect_inum += FIRST_HBIN_OFFSET;
+        
+        indirect_cell = reg_load_cell(fs, indirect_inum);
+        if (indirect_cell == NULL) {
+          free(data_data);
+          free(db_cell);
+          tsk_fs_attrlist_markunused(fs_meta->attr);
+          return 1;
+        }
+        indirect = (REGFS_CELL_DB_INDIRECT *)&indirect_cell->data;
+        
+        i = 0;
+        read = 0;
+        while (read < data_length) {
+          TSK_INUM_T data_inum;
+          REGFS_CELL *data_cell;
+          ssize_t data_chunk_length;
+          
+          if (i >= (indirect_cell->length - 4) / 4) {
+            free(db_cell);
+            free(indirect_cell);
+            tsk_fs_attrlist_markunused(fs_meta->attr);
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+            tsk_error_set_errstr("Required offsets overran DB "
+                                 "indirect block array.");
+            return 1;
+          }
+          
+          data_inum = tsk_getu32(fs->endian, 
+                                ((uint8_t *)&indirect->offset_list) + i * 4);
+          data_inum += FIRST_HBIN_OFFSET;
+          
+          if (i == 0) {
+            data_attr->rd.offset = data_inum + 4;
+          }
+          
+          data_cell = reg_load_cell(fs, data_inum);
+          if (data_cell == NULL) {
+            free(data_data);
+            free(db_cell);
+            free(indirect_cell);
+            tsk_fs_attrlist_markunused(fs_meta->attr);
+            return 1;
+          }
+          
+          data_chunk_length = data_cell->length - 4;
+          if (data_length - read < data_cell->length - 4) {
+            data_chunk_length = data_length - read;
+          }
+          
+          memcpy(data_data + read, ((uint8_t *)&data_cell->data) + 4, 
+                 data_chunk_length);
+          read += data_chunk_length;
+          
+          free(data_cell);
+          i += 1;
+        }
 
-	free(indirect_cell);
+        free(indirect_cell);
       }
       free(db_cell);
     }
 
     if (data_length > 0) {
       tsk_fs_attr_set_str(a_fs_file, type_attr,
-			  NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
-			  1, data_data, data_length);
+                          NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
+                          1, data_data, data_length);
     }
     free(data_data);
-
 
     a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
     return 0;
@@ -474,9 +483,9 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
         tsk_error_set_errstr("regfs_file_add_meta: %" 
-			       PRIuINUM 
-			       " too large/small", 
-			     inum);
+                               PRIuINUM 
+                               " too large/small", 
+                             inum);
         return 1;
     }
     if (a_fs_file == NULL) {
@@ -575,10 +584,12 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->link = 0;
 
     // TODO(wb): potentially don't load these
+    /*
     if (reg_load_attrs(a_fs_file) != 0) {
       tsk_fs_file_close(a_fs_file);
       return 1;
     }
+    */
 
     return 0;
 }
@@ -604,20 +615,20 @@ reg_block_walk(TSK_FS_INFO * fs,
 
     if (tsk_verbose) {
       tsk_fprintf(stderr,
-		  "regfs_block_walk: Block Walking %" PRIuDADDR " to %"
-		  PRIuDADDR "\n", a_start_blk, a_end_blk);
+                  "regfs_block_walk: Block Walking %" PRIuDADDR " to %"
+                  PRIuDADDR "\n", a_start_blk, a_end_blk);
     }
 
     if (a_start_blk < fs->first_block || a_start_blk > fs->last_block) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
-	tsk_error_set_errstr("Invalid block walk start block");
+        tsk_error_set_errstr("Invalid block walk start block");
         return 1;
     }
     if (a_end_blk < fs->first_block || a_end_blk > fs->last_block) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
-	tsk_error_set_errstr("Invalid block walk end Block");
+        tsk_error_set_errstr("Invalid block walk end Block");
         return 1;
     }
 
@@ -647,37 +658,37 @@ reg_block_walk(TSK_FS_INFO * fs,
       memset(data_buf, 0, HBIN_SIZE);
 
       if (tsk_verbose) {
-	tsk_fprintf(stderr,
-		    "\nregfs_block_walk: Reading block %"  PRIuDADDR 
-		    " (offset %"  PRIuDADDR  
-		    ") for %" PRIuDADDR  " bytes\n",
-		    blknum, blknum * 4096, HBIN_SIZE);
+        tsk_fprintf(stderr,
+                    "\nregfs_block_walk: Reading block %"  PRIuDADDR 
+                    " (offset %"  PRIuDADDR  
+                    ") for %" PRIuDADDR  " bytes\n",
+                    blknum, blknum * 4096, HBIN_SIZE);
       }
 
       count = tsk_fs_read_block(fs, blknum, (char *)data_buf, HBIN_SIZE);
       if (count != HBIN_SIZE) {
-	tsk_fs_block_free(fs_block);
-	return 1;
+        tsk_fs_block_free(fs_block);
+        return 1;
       }
 
       if (tsk_fs_block_set(fs, fs_block, blknum,
-			   TSK_FS_BLOCK_FLAG_ALLOC | 
-			   TSK_FS_BLOCK_FLAG_META | 
-			   TSK_FS_BLOCK_FLAG_CONT | 
-			   TSK_FS_BLOCK_FLAG_RAW,
-			   (char *)data_buf) != 0) {
-	tsk_fs_block_free(fs_block);
-	return 1;
+                           TSK_FS_BLOCK_FLAG_ALLOC | 
+                           TSK_FS_BLOCK_FLAG_META | 
+                           TSK_FS_BLOCK_FLAG_CONT | 
+                           TSK_FS_BLOCK_FLAG_RAW,
+                           (char *)data_buf) != 0) {
+        tsk_fs_block_free(fs_block);
+        return 1;
       }
 
       retval = a_action(fs_block, a_ptr);
       if (retval == TSK_WALK_STOP) {
-	tsk_fs_block_free(fs_block);
-	return 0;
+        tsk_fs_block_free(fs_block);
+        return 0;
       }
       else if (retval == TSK_WALK_ERROR) {
-	tsk_fs_block_free(fs_block);
-	return 1;
+        tsk_fs_block_free(fs_block);
+        return 1;
       }
       
       blknum += 1;
@@ -722,8 +733,8 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
         tsk_error_set_errstr("reg_inode_walk: Start inode number: %" 
-			     PRIuDADDR "",
-			     start_inum);
+                             PRIuDADDR "",
+                             start_inum);
         return 1;
     }
 
@@ -731,19 +742,19 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
         tsk_error_set_errstr("reg_inode_walk: End inode number: %" 
-			     PRIuDADDR "",
-			     end_inum);
+                             PRIuDADDR "",
+                             end_inum);
         return 1;
     }
 
     if (tsk_verbose) {
       tsk_fprintf(stderr,
-		  "reg_inode_walk: Inode Walking %" PRIuDADDR " to %"
-		  PRIuDADDR "\n", start_inum, end_inum);
+                  "reg_inode_walk: Inode Walking %" PRIuDADDR " to %"
+                  PRIuDADDR "\n", start_inum, end_inum);
     }
     // Sanity check on flags -- make sure at least one ALLOC is set 
     if (((flags & TSK_FS_META_FLAG_ALLOC) == 00) & 
-	((flags & TSK_FS_META_FLAG_UNALLOC) == 0)) {
+        ((flags & TSK_FS_META_FLAG_UNALLOC) == 0)) {
       flags |= TSK_FS_META_FLAG_ALLOC;
       flags |= TSK_FS_META_FLAG_UNALLOC;
     }
@@ -757,92 +768,92 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     //   offset falls below lowest possible value
     while (1) {
       if (current_hbin_start < FIRST_HBIN_OFFSET) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_CORRUPT);
-	tsk_error_set_errstr("Failed to identify HBIN header");
-	return 1;
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_CORRUPT);
+        tsk_error_set_errstr("Failed to identify HBIN header");
+        return 1;
       }
       count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(HBIN));
       if (count != sizeof(HBIN)) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_READ);
-	tsk_error_set_errstr("Failed to read HBIN header");
-	return 1;
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_READ);
+        tsk_error_set_errstr("Failed to read HBIN header");
+        return 1;
       }
       if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
-	current_hbin_start -= 0x1000;
+        current_hbin_start -= 0x1000;
       }
       else {
-	current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
-	break;
+        current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
+        break;
       }
     }
 
     while (current_inum < end_inum       && 
-	   current_hbin_start < end_inum &&
+           current_hbin_start < end_inum &&
            please_continue != 0) {
 
-	  // skip HBIN headers
-	  if (current_inum - current_hbin_start < 0x20) {
-	    current_inum = current_hbin_start + 0x20;
-	  }
+          // skip HBIN headers
+          if (current_inum - current_hbin_start < 0x20) {
+            current_inum = current_hbin_start + 0x20;
+          }
 
           the_file = tsk_fs_file_open_meta(fs, NULL, current_inum);
-	  if (the_file == NULL) {
-	    return 1;
-	  }
-	  cell = the_file->meta->content_ptr;
+          if (the_file == NULL) {
+            return 1;
+          }
+          cell = the_file->meta->content_ptr;
 
-	  if (current_inum + cell->length > 
-	      current_hbin_start + current_hbin_length) {
-	    // The Cell overran into the next HBIN header
-	    tsk_fs_file_close(the_file);
-	    tsk_error_reset();
-	    tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
-	    tsk_error_set_errstr("Cell overran into subsequent HBIN header "
-				 "(start: 0x%llx length: 0x%x hbin: 0x%llx", 
-				 current_inum, cell->length, current_hbin_start);
-	    return 1;
-	  }
+          if (current_inum + cell->length > 
+              current_hbin_start + current_hbin_length) {
+            // The Cell overran into the next HBIN header
+            tsk_fs_file_close(the_file);
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+            tsk_error_set_errstr("Cell overran into subsequent HBIN header "
+                                 "(start: 0x%llx length: 0x%x hbin: 0x%llx", 
+                                 current_inum, cell->length, current_hbin_start);
+            return 1;
+          }
 
-	  if ((the_file->meta->flags & flags) > 0) {
-	    TSK_WALK_RET_ENUM ret = a_action(the_file, ptr);
-	    if (ret == TSK_WALK_CONT) {
-	      // continue!
-	    } else if (ret == TSK_WALK_STOP) {
-	      please_continue = 0;
-	    } else if (ret == TSK_WALK_ERROR) {
-	      tsk_fs_file_close(the_file);
-	      return 1;
-	    } else {
-	      // not sure whats going on, so... continue!
-	    }
-	  }
+          if ((the_file->meta->flags & flags) > 0) {
+            TSK_WALK_RET_ENUM ret = a_action(the_file, ptr);
+            if (ret == TSK_WALK_CONT) {
+              // continue!
+            } else if (ret == TSK_WALK_STOP) {
+              please_continue = 0;
+            } else if (ret == TSK_WALK_ERROR) {
+              tsk_fs_file_close(the_file);
+              return 1;
+            } else {
+              // not sure whats going on, so... continue!
+            }
+          }
 
-	  current_inum += cell->length;
-	  if (current_inum >= current_hbin_start + current_hbin_length) {
-	    current_hbin_start += current_hbin_length;
+          current_inum += cell->length;
+          if (current_inum >= current_hbin_start + current_hbin_length) {
+            current_hbin_start += current_hbin_length;
 
-	    count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(HBIN));
-	    if (count != sizeof(HBIN)) {
-	      tsk_error_reset();
-	      tsk_error_set_errno(TSK_ERR_FS_READ);
-	      tsk_error_set_errstr("Failed to read HBIN header");
-	      return 1;
-	    }
+            count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(HBIN));
+            if (count != sizeof(HBIN)) {
+              tsk_error_reset();
+              tsk_error_set_errno(TSK_ERR_FS_READ);
+              tsk_error_set_errstr("Failed to read HBIN header");
+              return 1;
+            }
 
-	    if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
-	      please_continue = 0;
-	    }
-	    current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
+            if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
+              please_continue = 0;
+            }
+            current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
 
-	    if (tsk_verbose) {
-	      tsk_fprintf(stderr,
-			  "reg_inode_walk: Current hbin now 0x%llx\n",
-			  current_hbin_start);
-	    }
-	  }
-	  tsk_fs_file_close(the_file);
+            if (tsk_verbose) {
+              tsk_fprintf(stderr,
+                          "reg_inode_walk: Current hbin now 0x%llx\n",
+                          current_hbin_start);
+            }
+          }
+          tsk_fs_file_close(the_file);
     }
     return 0;
 }
@@ -858,12 +869,12 @@ reg_get_default_attr_type(const TSK_FS_FILE * a_file)
 
 static TSK_RETVAL_ENUM
 reg_dir_open_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-			 REGFS_CELL *cell, TSK_INUM_T parent_inum);
+                         REGFS_CELL *cell, TSK_INUM_T parent_inum);
 
 static TSK_RETVAL_ENUM
 reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
-				REGFS_CELL *cell, TSK_INUM_T parent_inum,
-				ssize_t offset_struct_size) {
+                                REGFS_CELL *cell, TSK_INUM_T parent_inum,
+                                ssize_t offset_struct_size) {
   unsigned int i;
   TSK_FS_NAME *fs_name;
   // use LF records as a template, same struct as LI and RI, besides
@@ -888,8 +899,8 @@ reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
     inum = FIRST_HBIN_OFFSET;
     inum += tsk_getu32(fs->endian, 
-		       (((uint8_t *)&subkey_list->offset_list) + 
-			             i * offset_struct_size));
+                       (((uint8_t *)&subkey_list->offset_list) + 
+                                     i * offset_struct_size));
 
     child_cell = reg_load_cell(fs, inum);
     if (child_cell == NULL) {
@@ -930,16 +941,16 @@ reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_lf(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   REGFS_CELL_LF *lf = (REGFS_CELL_LF *)&cell->data;
 
   if (tsk_verbose) {
     tsk_fprintf(stderr, "reg_dir_open_meta_lf: subkey list has type: %s\n", 
-		"LF");
+                "LF");
     tsk_fprintf(stderr, "reg_dir_open_meta_lf: subkey list at : 0x%llx\n", 
-		cell->inum);
+                cell->inum);
     tsk_fprintf(stderr, "reg_dir_open_meta_lf: subkey num offsets: %d\n",
-		tsk_getu16(fs->endian, lf->num_offsets));
+                tsk_getu16(fs->endian, lf->num_offsets));
   }
 
   return reg_dir_open_direct_subkey_list(fs, fs_dir, cell, parent_inum, 8);
@@ -947,16 +958,16 @@ reg_dir_open_meta_lf(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_lh(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
-		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   REGFS_CELL_LH *lh = (REGFS_CELL_LH *)&cell->data;
 
   if (tsk_verbose) {
     tsk_fprintf(stderr, "reg_dir_open_meta_lh: subkey list has type: %s\n", 
-		"LH");
+                "LH");
     tsk_fprintf(stderr, "reg_dir_open_meta_lh: subkey list at : 0x%llx\n", 
-		cell->inum);
+                cell->inum);
     tsk_fprintf(stderr, "reg_dir_open_meta_lh: subkey num offsets: %d\n",
-		tsk_getu16(fs->endian, lh->num_offsets));
+                tsk_getu16(fs->endian, lh->num_offsets));
   }
 
   return reg_dir_open_direct_subkey_list(fs, fs_dir, cell, parent_inum, 8);
@@ -964,7 +975,7 @@ reg_dir_open_meta_lh(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_ri(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   unsigned int i;
   REGFS_CELL_RI *ri = (REGFS_CELL_RI *)&cell->data;
   if (tsk_verbose) {
@@ -977,8 +988,8 @@ reg_dir_open_meta_ri(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
     inum = FIRST_HBIN_OFFSET;
     inum += tsk_getu32(fs->endian, 
-		       (((uint8_t *)&ri->offset_list) + 
-			             i * 4));
+                       (((uint8_t *)&ri->offset_list) + 
+                                     i * 4));
 
     child_cell = reg_load_cell(fs, inum);
     if (child_cell == NULL) {
@@ -998,15 +1009,15 @@ reg_dir_open_meta_ri(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_li(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   REGFS_CELL_LI *li = (REGFS_CELL_LI *)&cell->data;
   if (tsk_verbose) {
     tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey list has type: %s\n", 
-		"LI");
+                "LI");
     tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey list at : 0x%llx\n", 
-		cell->inum);
+                cell->inum);
     tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey num offsets: %d\n",
-		tsk_getu16(fs->endian, li->num_offsets));
+                tsk_getu16(fs->endian, li->num_offsets));
   }
 
   return reg_dir_open_direct_subkey_list(fs, fs_dir, cell, parent_inum, 8);
@@ -1014,7 +1025,7 @@ reg_dir_open_meta_li(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-		     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   TSK_RETVAL_ENUM ret;
 
   switch(cell->type) {
@@ -1095,7 +1106,7 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
 
     if (tsk_verbose) {
         tsk_fprintf(stderr,
-		    "reg_file_add_meta: opening directory at 0x%llx\n", inum);
+                    "reg_file_add_meta: opening directory at 0x%llx\n", inum);
     }
 
     fs_dir = *a_fs_dir;
@@ -1131,7 +1142,7 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
     nk = (REGFS_CELL_NK *)&cell->data;
 
     if (tsk_getu32(fs->endian, nk->num_subkeys) != 0xFFFFFFFF &&
-	tsk_getu32(fs->endian, nk->num_subkeys) != 0x0) {
+        tsk_getu32(fs->endian, nk->num_subkeys) != 0x0) {
       REGFS_CELL *list_cell;
       TSK_INUM_T list_inum;
 
@@ -1139,15 +1150,15 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
       list_inum += tsk_getu32(fs->endian, nk->subkey_list_offset);
       list_cell = reg_load_cell(fs, list_inum);
       if (list_cell == NULL) {
-	tsk_fs_dir_close(fs_dir);
-	return TSK_ERR;
+        tsk_fs_dir_close(fs_dir);
+        return TSK_ERR;
       }
       
       ret = reg_dir_open_subkey_list(fs, fs_dir, list_cell, inum);
       if (ret != TSK_OK) {
-	free(list_cell);
-	tsk_fs_dir_close(fs_dir);
-	return ret;
+        free(list_cell);
+        tsk_fs_dir_close(fs_dir);
+        return ret;
       }
 
       free(list_cell);
@@ -1166,87 +1177,87 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
     if (num_values > 0) {
       value_list_cell = reg_load_cell(fs, FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, nk->values_list_offset));
       if (value_list_cell == NULL) {
-	tsk_fs_dir_close(fs_dir);
-	return TSK_ERR;
+        tsk_fs_dir_close(fs_dir);
+        return TSK_ERR;
       }
       
       for (i = 0; i < tsk_getu16(fs->endian, nk->num_values); i++) {
-	TSK_INUM_T child_inum;
-	REGFS_CELL *child_cell;
-	REGFS_CELL_VK *vk;
-	char s[512];
-	char asc[512];
-	uint16_t name_length;
+        TSK_INUM_T child_inum;
+        REGFS_CELL *child_cell;
+        REGFS_CELL_VK *vk;
+        char s[512];
+        char asc[512];
+        uint16_t name_length;
 
-	memset(s, 0, 512);
-	memset(asc, 0, 512);
-	
-	tsk_fs_name_reset(fs_name);
-	
-	child_inum = FIRST_HBIN_OFFSET;
-	child_inum += tsk_getu32(fs->endian, 
-				 (uint8_t *)&value_list_cell->data + 4 + i * 4);
-	child_cell = reg_load_cell(fs, child_inum);
-	if (child_cell == NULL) {
-	  free(value_list_cell);
-	  tsk_fs_dir_close(fs_dir);
-	  return TSK_ERR;
-	}
-	vk = (REGFS_CELL_VK *)&child_cell->data;
+        memset(s, 0, 512);
+        memset(asc, 0, 512);
+        
+        tsk_fs_name_reset(fs_name);
+        
+        child_inum = FIRST_HBIN_OFFSET;
+        child_inum += tsk_getu32(fs->endian, 
+                                 (uint8_t *)&value_list_cell->data + 4 + i * 4);
+        child_cell = reg_load_cell(fs, child_inum);
+        if (child_cell == NULL) {
+          free(value_list_cell);
+          tsk_fs_dir_close(fs_dir);
+          return TSK_ERR;
+        }
+        vk = (REGFS_CELL_VK *)&child_cell->data;
 
-	name_length = (tsk_gets16(fs->endian, vk->name_length));
-	if (name_length > 512 - 1) {
-	  free(value_list_cell);
-	  tsk_fs_dir_close(fs_dir);
-	  tsk_error_reset();
-	  tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-	  tsk_error_set_errstr("VK name string too long");
-	  return TSK_ERR;
-	}
-	
-	if (name_length > 0) {
-	  uint32_t flags = (tsk_gets32(fs->endian, vk->flags));
-	  
-	  if ((flags & 0x01) > 0) {
-	    // ascii
-	    strncpy(asc, (char *)&vk->name, name_length);
-	  } else {
-	    // unicode
-	    memcpy(s, &vk->name, name_length); // TODO(wb): this might be x2
-	    if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
-			       512, asc, 512) != TSK_OK) {
-	      free(value_list_cell);
-	      tsk_fs_dir_close(fs_dir);
-	      tsk_error_reset();
-	      tsk_error_set_errno(TSK_ERR_FS_UNICODE);
-	      tsk_error_set_errstr("Failed to convert VK name string to UTF-8");
-	      return TSK_ERR;
-	    }
-	  }
-	} else {
-	  strncpy(asc, "(default)", 512);
-	}
-	
-	strncpy(fs_name->name, asc, 512);
-	fs_name->shrt_name = NULL;
-	fs_name->meta_addr = child_inum;
-	fs_name->meta_seq = 0;
-	fs_name->par_addr = inum;
-	fs_name->type = TSK_FS_NAME_TYPE_REG;
-	fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
-	
-	if (tsk_fs_dir_add(fs_dir, fs_name)) {
-	  free(value_list_cell);
-	  tsk_fs_dir_close(fs_dir);
-	  free(child_cell);
-	  return TSK_ERR;
-	}
+        name_length = (tsk_gets16(fs->endian, vk->name_length));
+        if (name_length > 512 - 1) {
+          free(value_list_cell);
+          tsk_fs_dir_close(fs_dir);
+          tsk_error_reset();
+          tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+          tsk_error_set_errstr("VK name string too long");
+          return TSK_ERR;
+        }
+        
+        if (name_length > 0) {
+          uint32_t flags = (tsk_gets32(fs->endian, vk->flags));
+          
+          if ((flags & 0x01) > 0) {
+            // ascii
+            strncpy(asc, (char *)&vk->name, name_length);
+          } else {
+            // unicode
+            memcpy(s, &vk->name, name_length); // TODO(wb): this might be x2
+            if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
+                               512, asc, 512) != TSK_OK) {
+              free(value_list_cell);
+              tsk_fs_dir_close(fs_dir);
+              tsk_error_reset();
+              tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+              tsk_error_set_errstr("Failed to convert VK name string to UTF-8");
+              return TSK_ERR;
+            }
+          }
+        } else {
+          strncpy(asc, "(default)", 512);
+        }
+        
+        strncpy(fs_name->name, asc, 512);
+        fs_name->shrt_name = NULL;
+        fs_name->meta_addr = child_inum;
+        fs_name->meta_seq = 0;
+        fs_name->par_addr = inum;
+        fs_name->type = TSK_FS_NAME_TYPE_REG;
+        fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
+        
+        if (tsk_fs_dir_add(fs_dir, fs_name)) {
+          free(value_list_cell);
+          tsk_fs_dir_close(fs_dir);
+          free(child_cell);
+          return TSK_ERR;
+        }
 
-	free(child_cell);
+        free(child_cell);
       }
       free(value_list_cell);
     }      
-    tsk_fs_name_free(fs_name);	
+    tsk_fs_name_free(fs_name);  
 
     return TSK_OK;
 }
@@ -1378,24 +1389,24 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
 
     // TODO(wb): print readable versions
     tsk_fprintf(hFile, "Major Version: %d\n", 
-		(tsk_getu32(fs->endian, reg->regf.major_version)));
+                (tsk_getu32(fs->endian, reg->regf.major_version)));
     tsk_fprintf(hFile, "Minor Version: %d\n", 
-		(tsk_getu32(fs->endian, reg->regf.minor_version)));
+                (tsk_getu32(fs->endian, reg->regf.minor_version)));
 
     if ((tsk_getu32(fs->endian, reg->regf.seq1) == 
-	 (tsk_getu32(fs->endian, reg->regf.seq2)))) {
+         (tsk_getu32(fs->endian, reg->regf.seq2)))) {
       tsk_fprintf(hFile, "Synchronized: %s\n", "Yes");
     } else {
       tsk_fprintf(hFile, "Synchronized: %s\n", "No");
     }
 
     if (regfs_utf16to8(fs->endian, "REGF hive name label",
-		       reg->regf.hive_name, 64,
-		       asc, 512) != TSK_OK) {
-	tsk_error_reset();
-	tsk_error_set_errno(TSK_ERR_FS_UNICODE);
-	tsk_error_set_errstr("Failed to convert REGF hive name string to UTF-8");
-	return 1;
+                       reg->regf.hive_name, 64,
+                       asc, 512) != TSK_OK) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+        tsk_error_set_errstr("Failed to convert REGF hive name string to UTF-8");
+        return 1;
     }
     tsk_fprintf(hFile, "Hive name: %s\n", asc);    
 
@@ -1403,17 +1414,17 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "--------------------------------------------\n");
 
     tsk_fprintf(hFile, "Offset to first key: %" PRIu32 "\n",
-		(FIRST_HBIN_OFFSET + 
-		 tsk_getu32(fs->endian, reg->regf.first_key_offset)));
+                (FIRST_HBIN_OFFSET + 
+                 tsk_getu32(fs->endian, reg->regf.first_key_offset)));
 
     tsk_fprintf(hFile, "Offset to last HBIN: %" PRIu32 "\n",
-		(tsk_getu32(fs->endian, reg->regf.last_hbin_offset)));
+                (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)));
 
     cell_count.num_active_bytes = FIRST_HBIN_OFFSET;
     cell_count.num_active_bytes += (fs->last_block_act - 1) * 0x20;
     if(reg_inode_walk(fs, fs->first_inum, fs->last_inum,
-		      TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC,
-		      reg_cell_count_callback, &cell_count)) {
+                      TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC,
+                      reg_cell_count_callback, &cell_count)) {
       return 1;
     }
     cell_count.num_inactive_bytes = fs->img_info->size - cell_count.num_active_bytes;
@@ -1422,27 +1433,27 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Number of\n");
     tsk_fprintf(hFile, "    cells:   %d/%d (active/inactive)\n", 
-		cell_count.num_active_cells, cell_count.num_inactive_cells);
+                cell_count.num_active_cells, cell_count.num_inactive_cells);
     tsk_fprintf(hFile, "    bytes:   %d/%d (bytes are approx.)\n",
-		cell_count.num_active_bytes, cell_count.num_inactive_bytes);
+                cell_count.num_active_bytes, cell_count.num_inactive_bytes);
     tsk_fprintf(hFile, "    VK records:   %d/%d\n",
-		cell_count.num_active_vk, cell_count.num_inactive_vk);
+                cell_count.num_active_vk, cell_count.num_inactive_vk);
     tsk_fprintf(hFile, "    NK records:   %d/%d\n",
-		cell_count.num_active_nk, cell_count.num_inactive_nk);
+                cell_count.num_active_nk, cell_count.num_inactive_nk);
     tsk_fprintf(hFile, "    LF records:   %d/%d\n",
-		cell_count.num_active_lf, cell_count.num_inactive_lf);
+                cell_count.num_active_lf, cell_count.num_inactive_lf);
     tsk_fprintf(hFile, "    LH records:   %d/%d\n",
-		cell_count.num_active_lh, cell_count.num_inactive_lh);
+                cell_count.num_active_lh, cell_count.num_inactive_lh);
     tsk_fprintf(hFile, "    LI records:   %d/%d\n",
-		cell_count.num_active_li, cell_count.num_inactive_li);
+                cell_count.num_active_li, cell_count.num_inactive_li);
     tsk_fprintf(hFile, "    RI records:   %d/%d\n",
-		cell_count.num_active_ri, cell_count.num_inactive_ri);
+                cell_count.num_active_ri, cell_count.num_inactive_ri);
     tsk_fprintf(hFile, "    SK records:   %d/%d\n",
-		cell_count.num_active_sk, cell_count.num_inactive_sk);
+                cell_count.num_active_sk, cell_count.num_inactive_sk);
     tsk_fprintf(hFile, "    DB records:   %d/%d\n",
-		cell_count.num_active_db, cell_count.num_inactive_db);
+                cell_count.num_active_db, cell_count.num_inactive_db);
     tsk_fprintf(hFile, "    unknown records:   %d/%d\n",
-		cell_count.num_active_unknown, cell_count.num_inactive_unknown);
+                cell_count.num_active_unknown, cell_count.num_inactive_unknown);
     return 0;
 }
 
@@ -1536,7 +1547,7 @@ reg_value_type_str(TSK_REGFS_VALUE_TYPE type) {
 
 static TSK_RETVAL_ENUM
 reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_CELL *cell;
     REGFS_CELL_VK *vk;
     char s[512];
@@ -1568,18 +1579,18 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
       uint32_t flags = (tsk_gets32(fs->endian, vk->flags));
       
       if ((flags & 0x01) > 0) {
-	// ascii
-	strncpy(asc, (char *)&vk->name, name_length);
+        // ascii
+        strncpy(asc, (char *)&vk->name, name_length);
       } else {
-	// unicode
-	memcpy(s, &vk->name, name_length);
-	if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
-			   512, asc, 512) != TSK_OK) {
-	  tsk_error_reset();
-	  tsk_error_set_errno(TSK_ERR_FS_UNICODE);
-	  tsk_error_set_errstr("Failed to convert VK name string to UTF-8");
-	  return TSK_ERR;
-	}
+        // unicode
+        memcpy(s, &vk->name, name_length);
+        if (regfs_utf16to8(fs->endian, "VK name", (uint8_t *)s, 
+                           512, asc, 512) != TSK_OK) {
+          tsk_error_reset();
+          tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+          tsk_error_set_errstr("Failed to convert VK name string to UTF-8");
+          return TSK_ERR;
+        }
       }
     } else {
       strncpy(asc, "(default)", 512);
@@ -1588,7 +1599,7 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
     tsk_fprintf(hFile, "Value Name: %s\n", asc); 
     // TODO(wb): get and use attribute here, instead
     tsk_fprintf(hFile, "Value Type: %s\n", 
-		reg_value_type_str(tsk_getu32(fs->endian, vk->value_type)));
+                reg_value_type_str(tsk_getu32(fs->endian, vk->value_type)));
 
     // TODO(wb): get and use attribute here, instead
     uint32_t value_size = tsk_getu32(fs->endian, vk->value_length);
@@ -1597,7 +1608,7 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
     }
     tsk_fprintf(hFile, "Value Size: %d\n", value_size);
     tsk_fprintf(hFile, "Value Offset: %d\n", 
-		FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, vk->value_offset));
+                FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, vk->value_offset));
 
     return TSK_OK;
 }
@@ -1605,7 +1616,7 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     ssize_t count;
     REGFS_CELL *cell;
     REGFS_CELL_NK *nk;
@@ -1640,27 +1651,27 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
       classname_length = (tsk_gets16(fs->endian, nk->classname_length));
 
       if (classname_length > 512) {
-		tsk_error_reset();
-		tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-		tsk_error_set_errstr("NK classname string too long");
-		return TSK_ERR;
+                tsk_error_reset();
+                tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+                tsk_error_set_errstr("NK classname string too long");
+                return TSK_ERR;
       }
-	  
+          
       count = tsk_fs_read(fs, FIRST_HBIN_OFFSET + classname_offset + 4, 
-						  s, classname_length);
+                                                  s, classname_length);
       if (count != classname_length) {
-		tsk_error_reset();
-		tsk_error_set_errno(TSK_ERR_FS_READ);
-		tsk_error_set_errstr("Failed to read NK classname string");
-		return TSK_ERR;
+                tsk_error_reset();
+                tsk_error_set_errno(TSK_ERR_FS_READ);
+                tsk_error_set_errstr("Failed to read NK classname string");
+                return TSK_ERR;
       }
-	  
+          
       if (regfs_utf16to8(fs->endian, "NK class name", (uint8_t *)s, 
-						 512, asc, 512) != TSK_OK) {
-		tsk_error_reset();
-		tsk_error_set_errno(TSK_ERR_FS_UNICODE);
-		tsk_error_set_errstr("Failed to convert NK classname string to UTF-8");
-		return TSK_ERR;
+                                                 512, asc, 512) != TSK_OK) {
+                tsk_error_reset();
+                tsk_error_set_errno(TSK_ERR_FS_UNICODE);
+                tsk_error_set_errstr("Failed to convert NK classname string to UTF-8");
+                return TSK_ERR;
       }
 
       tsk_fprintf(hFile, "Class Name: %s\n", asc);    
@@ -1668,10 +1679,10 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 
     name_length = (tsk_getu16(fs->endian, nk->name_length));
     if (name_length > 512) {
-	  tsk_error_reset();
-	  tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-	  tsk_error_set_errstr("NK key name string too long");
-	  return TSK_ERR;
+          tsk_error_reset();
+          tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+          tsk_error_set_errstr("NK key name string too long");
+          return TSK_ERR;
     }
     memset(s, 0, sizeof(s));
     strncpy(s, (char *)nk->name, name_length);
@@ -1688,14 +1699,14 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 
         if (the_file->meta->mtime) {
             the_file->meta->mtime -= sec_skew;
-		}
+                }
 
         tsk_fprintf(hFile, "Modified:\t%s\n",
             tsk_fs_time_to_str(the_file->meta->mtime, timeBuf));
 
         if (the_file->meta->mtime == 0) {
             the_file->meta->mtime += sec_skew;
-		}
+                }
 
         tsk_fprintf(hFile, "\nOriginal Entry Times:\n");
     }
@@ -1706,32 +1717,32 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
             timeBuf));
 
     if ((tsk_getu16(fs->endian, nk->is_root)) == 0x2C) {
-	  tsk_fprintf(hFile, "Parent Record: %s\n", "None (root record)");
+          tsk_fprintf(hFile, "Parent Record: %s\n", "None (root record)");
     } else {
-	  // u32 here, not PRIuINUM since the field is a u32...
-	  tsk_fprintf(hFile, "Parent Record: %" PRIu32 "\n", 
-		      FIRST_HBIN_OFFSET + 
-		      (tsk_getu32(fs->endian, nk->parent_nk_offset)));
+          // u32 here, not PRIuINUM since the field is a u32...
+          tsk_fprintf(hFile, "Parent Record: %" PRIu32 "\n", 
+                      FIRST_HBIN_OFFSET + 
+                      (tsk_getu32(fs->endian, nk->parent_nk_offset)));
     }
 
     if (tsk_getu32(fs->endian, nk->num_subkeys) == 0xFFFFFFFF ||
-	tsk_getu32(fs->endian, nk->num_subkeys) == 0x0) {
-	  tsk_fprintf(hFile, "Number of subkeys: %s\n", "None");
+        tsk_getu32(fs->endian, nk->num_subkeys) == 0x0) {
+          tsk_fprintf(hFile, "Number of subkeys: %s\n", "None");
     } else {
-	  tsk_fprintf(hFile, "Number of subkeys: %d\n", 
-		      tsk_getu32(fs->endian, nk->num_subkeys));
-	  tsk_fprintf(hFile, "Subkey list inode: %d\n", 
-		      FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, nk->subkey_list_offset));
+          tsk_fprintf(hFile, "Number of subkeys: %d\n", 
+                      tsk_getu32(fs->endian, nk->num_subkeys));
+          tsk_fprintf(hFile, "Subkey list inode: %d\n", 
+                      FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, nk->subkey_list_offset));
     }
 
     if (tsk_getu32(fs->endian, nk->num_values) == 0xFFFFFFFF ||
-	tsk_getu32(fs->endian, nk->num_values) == 0x0) {
-	  tsk_fprintf(hFile, "Number of values: %s\n", "None");
+        tsk_getu32(fs->endian, nk->num_values) == 0x0) {
+          tsk_fprintf(hFile, "Number of values: %s\n", "None");
     } else {
-	  tsk_fprintf(hFile, "Number of values: %d\n", 
-		      tsk_getu32(fs->endian, nk->num_values));
-	  tsk_fprintf(hFile, "Value list inode: %d\n", 
-		      FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, nk->values_list_offset));
+          tsk_fprintf(hFile, "Number of values: %d\n", 
+                      tsk_getu32(fs->endian, nk->num_values));
+          tsk_fprintf(hFile, "Value list inode: %d\n", 
+                      FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, nk->values_list_offset));
     }
 
     return TSK_OK;
@@ -1739,7 +1750,7 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
   REGFS_CELL *cell;
   REGFS_CELL_LF *lf;
@@ -1768,8 +1779,8 @@ reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
 
     inum = FIRST_HBIN_OFFSET;
     inum += tsk_getu32(fs->endian, 
-		       (((uint8_t *)&lf->offset_list) + 
-			             i * 8));
+                       (((uint8_t *)&lf->offset_list) + 
+                                     i * 8));
 
     child_cell = reg_load_cell(fs, inum);
     if (child_cell == NULL) {
@@ -1799,7 +1810,7 @@ reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
   REGFS_CELL *cell;
   REGFS_CELL_LH *lh;
@@ -1826,8 +1837,8 @@ reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
 
     inum = FIRST_HBIN_OFFSET;
     inum += tsk_getu32(fs->endian, 
-		       (((uint8_t *)&lh->offset_list) + 
-			             i * 8));
+                       (((uint8_t *)&lh->offset_list) + 
+                                     i * 8));
 
     child_cell = reg_load_cell(fs, inum);
     if (child_cell == NULL) {
@@ -1857,7 +1868,7 @@ reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
   REGFS_CELL *cell;
   REGFS_CELL_LI *li;
@@ -1884,8 +1895,8 @@ reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
 
     inum = FIRST_HBIN_OFFSET;
     inum += tsk_getu32(fs->endian, 
-		       (((uint8_t *)&li->offset_list) + 
-			             i * 4));
+                       (((uint8_t *)&li->offset_list) + 
+                                     i * 4));
 
     child_cell = reg_load_cell(fs, inum);
     if (child_cell == NULL) {
@@ -1915,7 +1926,7 @@ reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
   REGFS_CELL *cell;
   REGFS_CELL_RI *ri;
@@ -1939,8 +1950,8 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 
     inum = FIRST_HBIN_OFFSET;
     inum += tsk_getu32(fs->endian, 
-		       (((uint8_t *)&ri->offset_list) + 
-			             i * 4));
+                       (((uint8_t *)&ri->offset_list) + 
+                                     i * 4));
 
     child_cell = reg_load_cell(fs, inum);
     if (child_cell == NULL) {
@@ -1949,8 +1960,8 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 
     tsk_fprintf(hFile, "\n");
     tsk_fprintf(hFile, 
-		" [%2d] Subrecord type: %s\n", i, 
-		reg_record_type_str(child_cell->type));
+                " [%2d] Subrecord type: %s\n", i, 
+                reg_record_type_str(child_cell->type));
     tsk_fprintf(hFile, "      Subrecord offset: %lld\n", inum);
 
     free(child_cell);
@@ -1961,9 +1972,9 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_CELL *cell;
-	cell = (REGFS_CELL *)the_file->meta->content_ptr;
+        cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
@@ -1978,7 +1989,7 @@ reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_CELL *cell;
     cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
@@ -2001,7 +2012,7 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
     indirect_inum = tsk_getu32(fs->endian, db->offset);
     indirect_inum += FIRST_HBIN_OFFSET;
     tsk_fprintf(hFile, "DB Indirect Record at inode: %" PRIuDADDR "\n", 
-		indirect_inum);
+                indirect_inum);
 
     indirect_cell = reg_load_cell(fs, indirect_inum);
     if (indirect_cell == NULL) {
@@ -2010,26 +2021,26 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
     indirect = (REGFS_CELL_DB_INDIRECT *)&indirect_cell->data;
 
     tsk_fprintf(hFile, "Number of potential data chunks: %d\n", 
-		(indirect_cell->length - 4) / 4);
-	
+                (indirect_cell->length - 4) / 4);
+        
     for (i = 0; i < (indirect_cell->length - 4) / 4; i++) {
       TSK_INUM_T data_inum;
       REGFS_CELL *data_cell;
       
       data_inum = tsk_getu32(fs->endian, 
-			     ((uint8_t *)&indirect->offset_list) + i * 4);
+                             ((uint8_t *)&indirect->offset_list) + i * 4);
       data_inum += FIRST_HBIN_OFFSET;
 
       tsk_fprintf(hFile, "  [%d] Data chunk at: %" PRIuDADDR "\n",
-		  i, data_inum);
+                  i, data_inum);
       
       data_cell = reg_load_cell(fs, data_inum);
       if (data_cell == NULL) {
-	free(indirect_cell);
-	return TSK_ERR;
+        free(indirect_cell);
+        return TSK_ERR;
       }
       tsk_fprintf(hFile, "      Data chunk length: %d\n", 
-		  data_cell->length - 4);
+                  data_cell->length - 4);
       
       free(data_cell);
     }
@@ -2040,7 +2051,7 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
-		  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     REGFS_CELL *cell;
     cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
@@ -2093,7 +2104,7 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
   //   it handles all the cell loading, reading, etc.
   the_file = tsk_fs_file_open_meta(fs, NULL, inum);
   if (the_file == NULL) {
-	return 1;
+        return 1;
   }
   cell = the_file->meta->content_ptr;
   
@@ -2319,8 +2330,8 @@ reg_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
     memset(&cell_count, 0, sizeof(REGFS_CELL_COUNT));
     //    if(reg_inode_walk(fs, fs->first_inum, fs->last_inum,
-    //		      TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC,
-    //		      reg_cell_count_callback, &cell_count)) {
+    //                TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC,
+    //                reg_cell_count_callback, &cell_count)) {
       // TODO(wb): ignore errors here?
       // ignore error and do the best we can.
     //    }
