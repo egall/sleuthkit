@@ -224,6 +224,11 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
         fs_meta->attr = tsk_fs_attrlist_alloc();
         tsk_fs_attrlist_markunused(fs_meta->attr);
     }
+
+    if ( ! cell->is_allocated) {
+      fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
+      return 0;      
+    }
     
     if (cell->type != TSK_REGFS_RECORD_TYPE_VK) {
       fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
@@ -426,9 +431,11 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
       free(db_cell);
     }
 
-    tsk_fs_attr_set_str(a_fs_file, type_attr,
-			NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
-			1, data_data, data_length);
+    if (data_length > 0) {
+      tsk_fs_attr_set_str(a_fs_file, type_attr,
+			  NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
+			  1, data_data, data_length);
+    }
     free(data_data);
 
 
@@ -526,7 +533,7 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->mode = 0007777;
     a_fs_file->meta->nlink = 1;
 
-    if (cell->type == TSK_REGFS_RECORD_TYPE_VK) {
+    if (cell->type == TSK_REGFS_RECORD_TYPE_VK && cell->is_allocated) {
       REGFS_CELL_VK *vk = (REGFS_CELL_VK *)&cell->data;
       a_fs_file->meta->size = tsk_getu32(fs->endian, vk->value_length);
     } else {
@@ -537,7 +544,7 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->uid = 0;
     a_fs_file->meta->gid = 0;
 
-    if (cell->type == TSK_REGFS_RECORD_TYPE_NK) {
+    if (cell->type == TSK_REGFS_RECORD_TYPE_NK && cell->is_allocated) {
       REGFS_CELL_NK *nk = (REGFS_CELL_NK *)&cell->data;
       uint64_t nttime = tsk_getu64(fs->endian, nk->timestamp);
       a_fs_file->meta->mtime = nt2unixtime(nttime);
@@ -1504,7 +1511,7 @@ reg_value_type_str(TSK_REGFS_VALUE_TYPE type) {
     return "RegQWord";
     break;
   case TSK_REGFS_VALUE_TYPE_REGNONE:
-    return "RegNonoe";
+    return "RegNone";
     break;
   case TSK_REGFS_VALUE_TYPE_REGBIGENDIAN:
     return "RegBigEndian";
@@ -1544,6 +1551,10 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "VK");
+
+    if ( ! cell->is_allocated) {
+      return TSK_OK;
+    }
 
     name_length = (tsk_gets16(fs->endian, vk->name_length));
     if (name_length > 512 - 1) {
@@ -1611,6 +1622,10 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "NK");
+
+    if ( ! cell->is_allocated) {
+      return TSK_OK;
+    }
 
     if ((tsk_gets32(fs->endian, nk->classname_offset)) == 0xFFFFFFFF) {
       tsk_fprintf(hFile, "Class Name: %s\n", "None");
@@ -1736,6 +1751,10 @@ reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
   tsk_fprintf(hFile, "--------------------------------------------\n");
   tsk_fprintf(hFile, "Record Type: %s\n", "LF");
 
+  if ( ! cell->is_allocated) {
+    return TSK_OK;
+  }
+
   tsk_fprintf(hFile, "Number of Subkeys: %d\n", tsk_getu16(fs->endian, lf->num_offsets));
 
   for (i = 0; i < tsk_getu16(fs->endian, lf->num_offsets); i++) {
@@ -1792,6 +1811,10 @@ reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
   tsk_fprintf(hFile, "--------------------------------------------\n");
   tsk_fprintf(hFile, "Record Type: %s\n", "LH");
   
+  if ( ! cell->is_allocated) {
+    return TSK_OK;
+  }  
+
   for (i = 0; i < tsk_getu16(fs->endian, lh->num_offsets); i++) {
     TSK_INUM_T inum;
     REGFS_CELL *child_cell;
@@ -1846,6 +1869,10 @@ reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
   tsk_fprintf(hFile, "--------------------------------------------\n");
   tsk_fprintf(hFile, "Record Type: %s\n", "LI");
 
+  if ( ! cell->is_allocated) {
+    return TSK_OK;
+  }
+
   for (i = 0; i < tsk_getu16(fs->endian, li->num_offsets); i++) {
     TSK_INUM_T inum;
     REGFS_CELL *child_cell;
@@ -1899,6 +1926,11 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
   tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
   tsk_fprintf(hFile, "--------------------------------------------\n");
   tsk_fprintf(hFile, "Record Type: %s\n", "RI");
+
+  if ( ! cell->is_allocated) {
+    return TSK_OK;
+  }
+
   tsk_fprintf(hFile, "Number of Subrecords: %d\n", tsk_getu16(fs->endian, ri->num_offsets));
 
   for (i = 0; i < tsk_getu16(fs->endian, ri->num_offsets); i++) {
@@ -1936,6 +1968,11 @@ reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "SK");
+
+    if ( ! cell->is_allocated) {
+      return TSK_OK;
+    }
+
     return TSK_OK;
 }
 
@@ -1955,6 +1992,9 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
     REGFS_CELL_DB_INDIRECT *indirect;
     unsigned int i;
 
+    if ( ! cell->is_allocated) {
+      return TSK_OK;
+    }
 
     db = (REGFS_CELL_DB *)&cell->data;
 
@@ -2008,6 +2048,10 @@ reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
     uint8_t buf[6];
     memset(buf, 0, 6);
 
+    if ( ! cell->is_allocated) {
+      return TSK_OK;
+    }
+
     count = tsk_fs_read(fs, (cell->inum), (char *)buf, 6);
     if (count != 6) {
       tsk_error_reset();
@@ -2042,7 +2086,6 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
   TSK_FS_FILE *the_file;
   REGFS_CELL *cell;
 
-
   tsk_fprintf(hFile, "\nCELL INFORMATION\n");
   tsk_fprintf(hFile, "--------------------------------------------\n");
 
@@ -2055,12 +2098,12 @@ reg_istat(TSK_FS_INFO * fs, FILE * hFile,
   cell = the_file->meta->content_ptr;
   
   tsk_fprintf(hFile, "Cell: %" PRIuINUM "\n", inum);    
+  tsk_fprintf(hFile, "Cell Size: %" PRIu32 "\n", cell->length);
   if (cell->is_allocated) {
     tsk_fprintf(hFile, "Allocated: %s\n", "Yes");    
   } else {
     tsk_fprintf(hFile, "Allocated: %s\n", "No");    
   }
-  tsk_fprintf(hFile, "Cell Size: %" PRIu32 "\n", cell->length);
 
   switch (cell->type) {
   case TSK_REGFS_RECORD_TYPE_VK:
