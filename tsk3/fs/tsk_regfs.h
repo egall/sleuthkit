@@ -69,6 +69,11 @@
  *     [ ] fs->load_attrs
  *       Load data locations for a Record into runs.  This is how TSK will 
  *       access the data for a Record if you request it.
+ *       Because we do not use multiples of the block unit for data runs,
+ *       all data must be resident.  In the case of the Registry, this is
+ *       alright, since we expect to be able to load the Registry into memory.
+ *       But it does mean we load all data up for each VK record, even if it
+ *       uses DB indirect records (which would more correctly be nonresident).
  *     [x] fs->dir_open_meta
  *       Allocate (with tsk_fs_dir_alloc) or reset a TSK_FS_DIR structure,
  *       set the TSK_FS_FILE substructure, and add the names of entries
