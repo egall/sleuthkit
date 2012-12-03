@@ -583,14 +583,6 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 
     a_fs_file->meta->link = 0;
 
-    // TODO(wb): potentially don't load these
-    /*
-    if (reg_load_attrs(a_fs_file) != 0) {
-      tsk_fs_file_close(a_fs_file);
-      return 1;
-    }
-    */
-
     return 0;
 }
 
