@@ -245,6 +245,7 @@ extern "C" {
         TSK_FS_ATTR_TYPE_HFS_RSRC = 0x1101,     // 4353 Resource fork of regular files
         TSK_FS_ATTR_TYPE_HFS_EXT_ATTR = 0x1102, // 4354 Extended Attributes, except compression records
         TSK_FS_ATTR_TYPE_HFS_COMP_REC = 0x1103, // 4355 Compression records
+	TSK_FS_ATTR_TYPE_REG_VALUE_TYPE = 0x1104 // 4356 Type of Registry value
     } TSK_FS_ATTR_TYPE_ENUM;
 
 #define TSK_FS_ATTR_ID_DEFAULT  0       ///< Default Data ID used if file system does not assign one.
