@@ -246,9 +246,17 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
       return 1;
     }
 
-    tsk_fs_attr_set_str(a_fs_file, type_attr,
-                        NULL, TSK_FS_ATTR_TYPE_REG_VALUE_TYPE,
-                        0, &(vk->value_type), 4);
+    uint8_t buf[4];
+    memset(buf, 0, 4);
+    memcpy(buf, &(vk->value_type), 4);
+
+    if(tsk_fs_attr_set_str(a_fs_file, type_attr,
+			   NULL, TSK_FS_ATTR_TYPE_REG_VALUE_TYPE,
+//			   0, &(vk->value_type), 4)) {
+			   0, buf, 4)) {
+      tsk_fs_attrlist_markunused(fs_meta->attr);
+      return 1;
+    }
 
     // do attribute TSK_FS_ATTR_TYPE_NTFS_DATA
     //   which is an attribute that contains the value data
@@ -442,13 +450,15 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     }
 
     if (data_length > 0) {
-      tsk_fs_attr_set_str(a_fs_file, type_attr,
+      // TODO(wb): check return value
+      tsk_fs_attr_set_str(a_fs_file, data_attr,
                           NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
                           1, data_data, data_length);
     }
     free(data_data);
 
     a_fs_file->meta->attr_state = TSK_FS_META_ATTR_STUDIED;
+
     return 0;
 }
 
@@ -1545,6 +1555,8 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
     char s[512];
     char asc[512];
     uint32_t name_length;
+    const TSK_FS_ATTR *type_attr;
+    const TSK_FS_ATTR *data_attr;
 
     memset(s, 0, 512);
     memset(asc, 0, 512);
@@ -1587,20 +1599,42 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
     } else {
       strncpy(asc, "(default)", 512);
     }
-    
     tsk_fprintf(hFile, "Value Name: %s\n", asc); 
-    // TODO(wb): get and use attribute here, instead
-    tsk_fprintf(hFile, "Value Type: %s\n", 
-                reg_value_type_str(tsk_getu32(fs->endian, vk->value_type)));
 
-    // TODO(wb): get and use attribute here, instead
-    uint32_t value_size = tsk_getu32(fs->endian, vk->value_length);
-    if (value_size >= 0x8000000) {
-      value_size -= 0x80000000;
+    if (reg_load_attrs(the_file) != 0) {
+      return TSK_ERR;
     }
-    tsk_fprintf(hFile, "Value Size: %d\n", value_size);
-    tsk_fprintf(hFile, "Value Offset: %d\n", 
-                FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, vk->value_offset));
+    
+
+    type_attr = tsk_fs_attrlist_get(the_file->meta->attr,
+				    TSK_FS_ATTR_TYPE_REG_VALUE_TYPE);
+    if (type_attr == NULL) {
+          tsk_error_reset();
+          tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+          tsk_error_set_errstr("Failed to load value type attribute");
+          return TSK_ERR;
+    }
+
+    tsk_fprintf(hFile, "Value Type: %s\n", 
+                reg_value_type_str(tsk_getu32(fs->endian, 
+					      type_attr->rd.buf)));
+
+    data_attr = tsk_fs_attrlist_get(the_file->meta->attr,
+				    TSK_FS_ATTR_TYPE_NTFS_DATA);
+    if (data_attr == NULL) {
+          tsk_error_reset();
+          tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+          tsk_error_set_errstr("Failed to load value data attribute");
+          return TSK_ERR;
+    }
+
+    tsk_fprintf(hFile, "Value Size: %d\n", data_attr->size);
+    if (data_attr->rd.buf_size > 0x4 && 
+	data_attr->rd.buf_size < 0x80000000) {
+      tsk_fprintf(hFile, "Value Offset: %d\n", 
+		  FIRST_HBIN_OFFSET + tsk_getu32(fs->endian, 
+						 vk->value_offset));
+    }
 
     return TSK_OK;
 }
