@@ -871,11 +871,12 @@ reg_get_default_attr_type(const TSK_FS_FILE * a_file)
 
 static TSK_RETVAL_ENUM
 reg_dir_open_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-                         REGFS_CELL *cell, TSK_INUM_T parent_inum);
+                         const REGFS_CELL *cell, TSK_INUM_T parent_inum);
 
 static TSK_RETVAL_ENUM
 reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
-                                REGFS_CELL *cell, TSK_INUM_T parent_inum,
+                                const REGFS_CELL *cell, 
+				TSK_INUM_T parent_inum,
                                 ssize_t offset_struct_size) {
   unsigned int i;
   TSK_FS_NAME *fs_name;
@@ -943,7 +944,7 @@ reg_dir_open_direct_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_lf(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     const REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   REGFS_CELL_LF *lf = (REGFS_CELL_LF *)&cell->data;
 
   if (tsk_verbose) {
@@ -960,7 +961,7 @@ reg_dir_open_meta_lf(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_lh(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
-                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     const REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   REGFS_CELL_LH *lh = (REGFS_CELL_LH *)&cell->data;
 
   if (tsk_verbose) {
@@ -977,7 +978,7 @@ reg_dir_open_meta_lh(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_ri(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     const REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   unsigned int i;
   REGFS_CELL_RI *ri = (REGFS_CELL_RI *)&cell->data;
   if (tsk_verbose) {
@@ -1011,7 +1012,7 @@ reg_dir_open_meta_ri(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_meta_li(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+                     const REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   REGFS_CELL_LI *li = (REGFS_CELL_LI *)&cell->data;
   if (tsk_verbose) {
     tsk_fprintf(stderr, "reg_dir_open_meta_li: subkey list has type: %s\n", 
@@ -1027,7 +1028,7 @@ reg_dir_open_meta_li(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir,
 
 static TSK_RETVAL_ENUM
 reg_dir_open_subkey_list(TSK_FS_INFO *fs, TSK_FS_DIR *fs_dir, 
-                     REGFS_CELL *cell, TSK_INUM_T parent_inum) {
+			 const REGFS_CELL *cell, TSK_INUM_T parent_inum) {
   TSK_RETVAL_ENUM ret;
 
   switch(cell->type) {
@@ -1292,7 +1293,7 @@ typedef struct REGFS_CELL_COUNT {
 static TSK_WALK_RET_ENUM
 reg_cell_count_callback(TSK_FS_FILE *the_file, void *ptr) {
   REGFS_CELL_COUNT *cell_count = (REGFS_CELL_COUNT *)ptr;
-  REGFS_CELL *cell = the_file->meta->content_ptr;
+  const REGFS_CELL *cell = the_file->meta->content_ptr;
 
   if (cell->is_allocated) {
     cell_count->num_active_cells += 1;
@@ -1549,9 +1550,9 @@ reg_value_type_str(TSK_REGFS_VALUE_TYPE type) {
 
 static TSK_RETVAL_ENUM
 reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
-                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-    REGFS_CELL_VK *vk;
+	     TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+    const REGFS_CELL *cell;
+    const REGFS_CELL_VK *vk;
     char s[512];
     char asc[512];
     uint32_t name_length;
@@ -1642,10 +1643,10 @@ reg_istat_vk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
-                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+	     TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
     ssize_t count;
-    REGFS_CELL *cell;
-    REGFS_CELL_NK *nk;
+    const REGFS_CELL *cell;
+    const REGFS_CELL_NK *nk;
     char s[512]; // to be used throughout, temporarily
     uint16_t name_length;
     char timeBuf[128];
@@ -1776,10 +1777,10 @@ reg_istat_nk(TSK_FS_INFO * fs, FILE * hFile,
 
 static TSK_RETVAL_ENUM
 reg_istat_lf(TSK_FS_INFO * fs, FILE * hFile,
-                  TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
+	     TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
-  REGFS_CELL *cell;
-  REGFS_CELL_LF *lf;
+  const REGFS_CELL *cell;
+  const REGFS_CELL_LF *lf;
 
   cell = (REGFS_CELL *)the_file->meta->content_ptr;
   lf = (REGFS_CELL_LF *)&cell->data;
@@ -1838,8 +1839,8 @@ static TSK_RETVAL_ENUM
 reg_istat_lh(TSK_FS_INFO * fs, FILE * hFile,
                   TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
-  REGFS_CELL *cell;
-  REGFS_CELL_LH *lh;
+  const REGFS_CELL *cell;
+  const REGFS_CELL_LH *lh;
 
   cell = (REGFS_CELL *)the_file->meta->content_ptr;
   lh = (REGFS_CELL_LH *)&cell->data;
@@ -1896,8 +1897,8 @@ static TSK_RETVAL_ENUM
 reg_istat_li(TSK_FS_INFO * fs, FILE * hFile,
                   TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
-  REGFS_CELL *cell;
-  REGFS_CELL_LI *li;
+  const REGFS_CELL *cell;
+  const REGFS_CELL_LI *li;
 
   cell = (REGFS_CELL *)the_file->meta->content_ptr;
   li = (REGFS_CELL_LI *)&cell->data;
@@ -1954,8 +1955,8 @@ static TSK_RETVAL_ENUM
 reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
                   TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
   unsigned int i;
-  REGFS_CELL *cell;
-  REGFS_CELL_RI *ri;
+  const REGFS_CELL *cell;
+  const REGFS_CELL_RI *ri;
 
   cell = (REGFS_CELL *)the_file->meta->content_ptr;
   ri = (REGFS_CELL_RI *)&cell->data;
@@ -1999,8 +2000,8 @@ reg_istat_ri(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
                   TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-        cell = (REGFS_CELL *)the_file->meta->content_ptr;
+    const REGFS_CELL *cell;
+    cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
@@ -2016,18 +2017,19 @@ reg_istat_sk(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
                   TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
+    const REGFS_CELL *cell;
+    REGFS_CELL_DB *db;
+    TSK_INUM_T indirect_inum;
+    REGFS_CELL *indirect_cell;
+    REGFS_CELL_DB_INDIRECT *indirect;
+    unsigned int i;
+
     cell = (REGFS_CELL *)the_file->meta->content_ptr;
 
     tsk_fprintf(hFile, "\nRECORD INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Record Type: %s\n", "DB");    
 
-    REGFS_CELL_DB *db;
-    TSK_INUM_T indirect_inum;
-    REGFS_CELL *indirect_cell;
-    REGFS_CELL_DB_INDIRECT *indirect;
-    unsigned int i;
 
     if ( ! cell->is_allocated) {
       return TSK_OK;
@@ -2078,13 +2080,13 @@ reg_istat_db(TSK_FS_INFO * fs, FILE * hFile,
 static TSK_RETVAL_ENUM
 reg_istat_unknown(TSK_FS_INFO * fs, FILE * hFile,
                   TSK_FS_FILE *the_file, TSK_DADDR_T numblock, int32_t sec_skew) {
-    REGFS_CELL *cell;
-    cell = (REGFS_CELL *)the_file->meta->content_ptr;
-
+    const REGFS_CELL *cell;
     ssize_t count;
     uint8_t buf[6];
+
     memset(buf, 0, 6);
 
+    cell = (REGFS_CELL *)the_file->meta->content_ptr;
     if ( ! cell->is_allocated) {
       return TSK_OK;
     }
