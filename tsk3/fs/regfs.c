@@ -246,15 +246,13 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
       return 1;
     }
 
-    uint8_t buf[4];
-    memset(buf, 0, 4);
-    memcpy(buf, &(vk->value_type), 4);
-
-    if(tsk_fs_attr_set_str(a_fs_file, type_attr,
+    if (tsk_fs_attr_set_str(a_fs_file, type_attr,
 			   NULL, TSK_FS_ATTR_TYPE_REG_VALUE_TYPE,
-//			   0, &(vk->value_type), 4)) {
-			   0, buf, 4)) {
+			   0, &(vk->value_type), 4)) {
       tsk_fs_attrlist_markunused(fs_meta->attr);
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_AUX_MALLOC);
+      tsk_error_set_errstr("Failed to set value type attribute.");
       return 1;
     }
 
@@ -450,10 +448,16 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
     }
 
     if (data_length > 0) {
-      // TODO(wb): check return value
-      tsk_fs_attr_set_str(a_fs_file, data_attr,
-                          NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
-                          1, data_data, data_length);
+      if (tsk_fs_attr_set_str(a_fs_file, data_attr,
+			      NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
+			      1, data_data, data_length) != 0) {
+	free(data_data);
+	tsk_fs_attrlist_markunused(fs_meta->attr);
+	tsk_error_reset();
+	tsk_error_set_errno(TSK_ERR_AUX_MALLOC);
+	tsk_error_set_errstr("Failed to set value data attribute.");
+	return 1;
+      }
     }
     free(data_data);
 
@@ -1124,6 +1128,12 @@ reg_dir_open_meta(TSK_FS_INFO * fs, TSK_FS_DIR ** a_fs_dir, TSK_INUM_T inum)
     }
 
     // TODO(wb) figure this thing out
+    //  approach: do an inode_walk for unalloc inodes
+    //    then filter and accumulate NK and VK records
+    //    foreach of these
+    //       see if the unalloc values make sense
+    //       attempt to parse info
+    //
     //if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
     //    return tsk_fs_dir_find_orphans(fs, fs_dir);
     //}
@@ -2357,14 +2367,8 @@ reg_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->root_inum = (tsk_getu32(fs->endian, reg->regf.first_key_offset)); 
 
     memset(&cell_count, 0, sizeof(REGFS_CELL_COUNT));
-    //    if(reg_inode_walk(fs, fs->first_inum, fs->last_inum,
-    //                TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC,
-    //                reg_cell_count_callback, &cell_count)) {
-      // TODO(wb): ignore errors here?
-      // ignore error and do the best we can.
-    //    }
-    //    fs->inum_count = cell_count.num_active_cells + cell_count.num_inactive_cells;
-    fs->inum_count = 0;
+    // ridiculous value, but best we can do without scanning
+    fs->inum_count = fs->last_inum - fs->first_inum;
     
     fs->block_size = HBIN_SIZE;
     fs->first_block = 0;
