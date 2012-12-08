@@ -603,6 +603,12 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
 /**
  * TODO(wb): use length field and magic header to identify 
  *   slack space (UNALLOC) at the end of the file.
+ * Assumes the a_start_blk is a valid start to an HBIN, 
+ *   or else begins at the next valid HBIN.
+ * @param a_start_blk The starting block number.  It is NOT the address or
+ *   offset of the block in bytes.
+ * @param a_end_blk The ending block number.  It is NOT the address or
+ *   offset of the block in bytes.
  * @return 1 on error, 0 otherwise.
  */
 uint8_t
@@ -650,6 +656,114 @@ reg_block_walk(TSK_FS_INFO * fs,
         a_flags |=
             (TSK_FS_BLOCK_WALK_FLAG_CONT | TSK_FS_BLOCK_WALK_FLAG_META);
     }
+
+
+    // scan forward aligned 0x1000 at a time trying to find
+    //   the "hbin" magic
+    // start at `current_hbin_start`
+    // update `current_hbin_start` and `current_hbin_length`
+    // break if:
+    //   "hbin" magic found
+    //   offset rises above highest possible value
+    current_hbin_start = a_start_blk;
+    if (currrent_hbin_start % 0x1000 == 0) {
+      // align to next 0x1000
+      current_hbin_start = 0x1000 + current_hbin_start - 
+	(current_hbin_start % 0x1000);
+    }
+    while (1) {
+      if (current_hbin_start > fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_CORRUPT);
+        tsk_error_set_errstr("Failed to identify HBIN header");
+        return 1;
+      }
+      count = tsk_fs_read(fs, current_hbin_start, 
+			  (char *)&hbin, sizeof(HBIN));
+      if (count != sizeof(HBIN)) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_READ);
+        tsk_error_set_errstr("Failed to read HBIN header");
+        return 1;
+      }
+      if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
+	break;
+      }
+      else {
+        current_hbin_start += 0x1000;
+      }
+    }
+
+    uint8_t in_unallocd = 0;
+    while (current_hbin_start < a_end_blk && please_continue != 0)  {
+
+      if ( ! in_unallocd) {
+	count = tsk_fs_read(fs, current_hbin_start, 
+			    (char *)&hbin, sizeof(HBIN));
+	if (count != sizeof(HBIN)) {
+	  tsk_error_reset();
+	  tsk_error_set_errno(TSK_ERR_FS_READ);
+	  tsk_error_set_errstr("Failed to read HBIN header");
+	  return 1;
+	}
+
+	if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
+	  // we've found unalloc'd
+	  in_unallocd = 1;
+	  goto handle_unallocd;
+	} else {
+	  // still in alloc'd
+	  current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
+
+	  // need a loop here to repeatly invoke action()
+
+	}
+      } else {
+      handle_unallocd:	
+	// in unalloc'd
+	
+
+	CONTINUE HERE
+
+	count = tsk_fs_read_block(fs, blknum, (char *)data_buf, HBIN_SIZE);
+	if (count != HBIN_SIZE) {
+	  tsk_fs_block_free(fs_block);
+	  return 1;
+	}
+	
+	if (tsk_fs_block_set(fs, fs_block, blknum,
+			     TSK_FS_BLOCK_FLAG_ALLOC | 
+			     TSK_FS_BLOCK_FLAG_META | 
+			     TSK_FS_BLOCK_FLAG_CONT | 
+			     TSK_FS_BLOCK_FLAG_RAW,
+			     (char *)data_buf) != 0) {
+	  tsk_fs_block_free(fs_block);
+	  return 1;
+	}
+	
+	retval = a_action(fs_block, a_ptr);
+	if (retval == TSK_WALK_STOP) {
+	  tsk_fs_block_free(fs_block);
+	  return 0;
+	}
+	else if (retval == TSK_WALK_ERROR) {
+	  tsk_fs_block_free(fs_block);
+	  return 1;
+	}
+
+
+
+	current_hbin_start += 0x1000
+      }
+    }
+
+
+
+
+
+
+
+
 
     if ((fs_block = tsk_fs_block_alloc(fs)) == NULL) {
         return 1;
