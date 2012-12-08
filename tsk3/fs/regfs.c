@@ -657,50 +657,39 @@ reg_block_walk(TSK_FS_INFO * fs,
             (TSK_FS_BLOCK_WALK_FLAG_CONT | TSK_FS_BLOCK_WALK_FLAG_META);
     }
 
-
-    // scan forward aligned 0x1000 at a time trying to find
-    //   the "hbin" magic
-    // start at `current_hbin_start`
-    // update `current_hbin_start` and `current_hbin_length`
-    // break if:
-    //   "hbin" magic found
-    //   offset rises above highest possible value
-    current_hbin_start = a_start_blk;
-    if (currrent_hbin_start % 0x1000 == 0) {
-      // align to next 0x1000
-      current_hbin_start = 0x1000 + current_hbin_start - 
-	(current_hbin_start % 0x1000);
-    }
-    while (1) {
-      if (current_hbin_start > fs->last_block) {
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_CORRUPT);
-        tsk_error_set_errstr("Failed to identify HBIN header");
-        return 1;
-      }
-      count = tsk_fs_read(fs, current_hbin_start, 
-			  (char *)&hbin, sizeof(HBIN));
-      if (count != sizeof(HBIN)) {
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_READ);
-        tsk_error_set_errstr("Failed to read HBIN header");
-        return 1;
-      }
-      if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
-	break;
-      }
-      else {
-        current_hbin_start += 0x1000;
-      }
+    fs_block = tsk_fs_block_alloc(fs);
+    if (fs_block == NULL) {
+      tsk_error_reset();
+      tsk_error_set_errno(TSK_ERR_AUX_MALLOC);
+      tsk_error_set_errstr("Failed to allocate space for block");
+      return 1;
     }
 
     uint8_t in_unallocd = 0;
-    while (current_hbin_start < a_end_blk && please_continue != 0)  {
+    blknum = a_start_blk;
+
+    // should still do some scanning to figure out 
+    //   if we're currently in alloc'd or not
+
+    while (blknum < a_end_blk)  {
+      uint8_t block_buf[HBIN_SIZE];
+      ssize_t count;
+      memset(block_buf, 0, HBIN_SIZE);
+
+      if (tsk_verbose) {
+        tsk_fprintf(stderr,
+                    "\nregfs_block_walk: Reading block %"  PRIuDADDR 
+                    " (offset %"  PRIuDADDR ")\n",
+                    blknum, blknum * 4096);
+      }
 
       if ( ! in_unallocd) {
-	count = tsk_fs_read(fs, current_hbin_start, 
-			    (char *)&hbin, sizeof(HBIN));
-	if (count != sizeof(HBIN)) {
+	REGFS_HBIN hbin;
+	ssize_t count;
+
+	count = tsk_fs_read(fs, blknum * HBIN_SIZE, 
+			    (char *)&hbin, sizeof(REGFS_HBIN));
+	if (count != sizeof(REGFS_HBIN)) {
 	  tsk_error_reset();
 	  tsk_error_set_errno(TSK_ERR_FS_READ);
 	  tsk_error_set_errstr("Failed to read HBIN header");
@@ -710,33 +699,63 @@ reg_block_walk(TSK_FS_INFO * fs,
 	if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
 	  // we've found unalloc'd
 	  in_unallocd = 1;
-	  goto handle_unallocd;
+
+	  // retry the loop and continue in the unalloc'd handler
+	  continue;
 	} else {
 	  // still in alloc'd
+	  unsigned int i;
+	  uint32_t current_hbin_length;
+
 	  current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
 
-	  // need a loop here to repeatly invoke action()
+	  for (i = 0; i < current_hbin_length / HBIN_SIZE; i++) {
 
+	    count = tsk_fs_read_block(fs, blknum + i, 
+				      (char *)block_buf, HBIN_SIZE);
+	    if (count != HBIN_SIZE) {
+	      tsk_fs_block_free(fs_block);
+	      return 1;
+	    }
+	    
+	    if (tsk_fs_block_set(fs, fs_block, blknum + i,
+				 TSK_FS_BLOCK_FLAG_ALLOC | 
+				 TSK_FS_BLOCK_FLAG_META | 
+				 TSK_FS_BLOCK_FLAG_CONT | 
+				 TSK_FS_BLOCK_FLAG_RAW,
+				 (char *)block_buf) != 0) {
+	      tsk_fs_block_free(fs_block);
+	      return 1;
+	    }
+	    
+	    retval = a_action(fs_block, a_ptr);
+	    if (retval == TSK_WALK_STOP) {
+	      tsk_fs_block_free(fs_block);
+	      return 0;
+	    }
+	    else if (retval == TSK_WALK_ERROR) {
+	      tsk_fs_block_free(fs_block);
+	      return 1;
+	    }
+	  }
+	  
+	  blknum += current_hbin_length / HBIN_SIZE;
 	}
       } else {
-      handle_unallocd:	
 	// in unalloc'd
-	
 
-	CONTINUE HERE
-
-	count = tsk_fs_read_block(fs, blknum, (char *)data_buf, HBIN_SIZE);
+	count = tsk_fs_read_block(fs, blknum, (char *)block_buf, HBIN_SIZE);
 	if (count != HBIN_SIZE) {
 	  tsk_fs_block_free(fs_block);
 	  return 1;
 	}
 	
 	if (tsk_fs_block_set(fs, fs_block, blknum,
-			     TSK_FS_BLOCK_FLAG_ALLOC | 
+			     TSK_FS_BLOCK_FLAG_UNALLOC | 
 			     TSK_FS_BLOCK_FLAG_META | 
 			     TSK_FS_BLOCK_FLAG_CONT | 
 			     TSK_FS_BLOCK_FLAG_RAW,
-			     (char *)data_buf) != 0) {
+			     (char *)block_buf) != 0) {
 	  tsk_fs_block_free(fs_block);
 	  return 1;
 	}
@@ -751,67 +770,8 @@ reg_block_walk(TSK_FS_INFO * fs,
 	  return 1;
 	}
 
-
-
-	current_hbin_start += 0x1000
+	blknum += 1;
       }
-    }
-
-
-
-
-
-
-
-
-
-    if ((fs_block = tsk_fs_block_alloc(fs)) == NULL) {
-        return 1;
-    }
-
-    blknum = a_start_blk;
-
-    while (blknum < a_end_blk) {
-      ssize_t count;
-      uint8_t data_buf[HBIN_SIZE];
-
-      memset(data_buf, 0, HBIN_SIZE);
-
-      if (tsk_verbose) {
-        tsk_fprintf(stderr,
-                    "\nregfs_block_walk: Reading block %"  PRIuDADDR 
-                    " (offset %"  PRIuDADDR  
-                    ") for %" PRIuDADDR  " bytes\n",
-                    blknum, blknum * 4096, HBIN_SIZE);
-      }
-
-      count = tsk_fs_read_block(fs, blknum, (char *)data_buf, HBIN_SIZE);
-      if (count != HBIN_SIZE) {
-        tsk_fs_block_free(fs_block);
-        return 1;
-      }
-
-      if (tsk_fs_block_set(fs, fs_block, blknum,
-                           TSK_FS_BLOCK_FLAG_ALLOC | 
-                           TSK_FS_BLOCK_FLAG_META | 
-                           TSK_FS_BLOCK_FLAG_CONT | 
-                           TSK_FS_BLOCK_FLAG_RAW,
-                           (char *)data_buf) != 0) {
-        tsk_fs_block_free(fs_block);
-        return 1;
-      }
-
-      retval = a_action(fs_block, a_ptr);
-      if (retval == TSK_WALK_STOP) {
-        tsk_fs_block_free(fs_block);
-        return 0;
-      }
-      else if (retval == TSK_WALK_ERROR) {
-        tsk_fs_block_free(fs_block);
-        return 1;
-      }
-      
-      blknum += 1;
     }
 
     tsk_fs_block_free(fs_block);
@@ -839,7 +799,7 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     TSK_FS_META_WALK_CB a_action, void *ptr)
 {
     TSK_FS_FILE *the_file;
-    HBIN hbin;
+    REGFS_HBIN hbin;
     REGFS_CELL *cell;
     TSK_INUM_T current_inum = start_inum;
     TSK_DADDR_T current_hbin_start = current_inum - (current_inum % HBIN_SIZE);
@@ -893,8 +853,8 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         tsk_error_set_errstr("Failed to identify HBIN header");
         return 1;
       }
-      count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(HBIN));
-      if (count != sizeof(HBIN)) {
+      count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(REGFS_HBIN));
+      if (count != sizeof(REGFS_HBIN)) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_READ);
         tsk_error_set_errstr("Failed to read HBIN header");
@@ -954,8 +914,8 @@ reg_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
           if (current_inum >= current_hbin_start + current_hbin_length) {
             current_hbin_start += current_hbin_length;
 
-            count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(HBIN));
-            if (count != sizeof(HBIN)) {
+            count = tsk_fs_read(fs, current_hbin_start, (char *)&hbin, sizeof(REGFS_HBIN));
+            if (count != sizeof(REGFS_HBIN)) {
               tsk_error_reset();
               tsk_error_set_errno(TSK_ERR_FS_READ);
               tsk_error_set_errstr("Failed to read HBIN header");
@@ -1536,6 +1496,12 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
         return 1;
     }
     tsk_fprintf(hFile, "Hive name: %s\n", asc);    
+    tsk_fprintf(hFile, "Offset to last HBIN: %" PRIu32 "\n",
+                (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)));
+    tsk_fprintf(hFile, "Number of Blocks in Hive: %" PRIu32 "\n",
+		fs->last_block);
+    tsk_fprintf(hFile, "Number of Blocks in Image: %" PRIu32 "\n",
+		fs->last_block_act);
 
     tsk_fprintf(hFile, "\nMETADATA INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
@@ -1544,9 +1510,8 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
                 (FIRST_HBIN_OFFSET + 
                  tsk_getu32(fs->endian, reg->regf.first_key_offset)));
 
-    tsk_fprintf(hFile, "Offset to last HBIN: %" PRIu32 "\n",
-                (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)));
-
+    tsk_fprintf(hFile, "\nCONTENT INFORMATION\n");
+    tsk_fprintf(hFile, "--------------------------------------------\n");
     cell_count.num_active_bytes = FIRST_HBIN_OFFSET;
     cell_count.num_active_bytes += (fs->last_block_act - 1) * 0x20;
     if(reg_inode_walk(fs, fs->first_inum, fs->last_inum,
@@ -1556,8 +1521,6 @@ reg_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     }
     cell_count.num_inactive_bytes = fs->img_info->size - cell_count.num_active_bytes;
     
-    tsk_fprintf(hFile, "\nCONTENT INFORMATION\n");
-    tsk_fprintf(hFile, "--------------------------------------------\n");
     tsk_fprintf(hFile, "Number of\n");
     tsk_fprintf(hFile, "    cells:   %d/%d (active/inactive)\n", 
                 cell_count.num_active_cells, cell_count.num_inactive_cells);
@@ -2408,11 +2371,11 @@ reg_file_get_sidstr(TSK_FS_FILE * a_fs_file, char **sid_str)
  *   Read data into the supplied REGF, and do some sanity checking.
  */
 TSK_RETVAL_ENUM
-reg_load_regf(TSK_FS_INFO *fs_info, REGF *regf) {
+reg_load_regf(TSK_FS_INFO *fs_info, REGFS_REGF *regf) {
     ssize_t count;
 
-    count = tsk_fs_read(fs_info, 0, (char *)regf, sizeof(REGF));
-    if (count != sizeof(REGF)) {
+    count = tsk_fs_read(fs_info, 0, (char *)regf, sizeof(REGFS_REGF));
+    if (count != sizeof(REGFS_REGF)) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_READ);
         tsk_error_set_errstr("Failed to read REGF header structure");
@@ -2486,8 +2449,8 @@ reg_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     
     fs->block_size = HBIN_SIZE;
     fs->first_block = 0;
-    fs->last_block = (tsk_getu32(fs->endian, reg->regf.last_hbin_offset)); 
-    fs->last_block_act = (img_info->size - (img_info->size % HBIN_SIZE)) / HBIN_SIZE;
+    fs->last_block = ((tsk_getu32(fs->endian, reg->regf.last_hbin_offset)) + FIRST_HBIN_OFFSET) / HBIN_SIZE; 
+    fs->last_block_act = img_info->size / HBIN_SIZE;
 
     fs->inode_walk = reg_inode_walk;
     fs->block_walk = reg_block_walk;
