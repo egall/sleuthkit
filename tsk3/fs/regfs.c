@@ -596,15 +596,31 @@ reg_file_add_meta(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file, TSK_INUM_T inum) {
     a_fs_file->meta->seq = 0;
 
     a_fs_file->meta->link = 0;
-
+ 
     return 0;
 }
 
+static uint8_t 
+hbin_starts_here(TSK_FS_INFO *fs, TSK_DADDR_T blknum) {
+  REGFS_HBIN hbin;
+  ssize_t count;
+
+  memset(&hbin, 0, sizeof(REGFS_HBIN));
+  
+  count = tsk_fs_read(fs, blknum * HBIN_SIZE, 
+		      (char *)&hbin, sizeof(REGFS_HBIN));
+  if (count != sizeof(REGFS_HBIN)) {
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("Failed to read HBIN header");
+    return 1;
+  }
+  
+  return tsk_getu32(fs->endian, &hbin) == 0x6e696268;
+}
+
+
 /**
- * TODO(wb): use length field and magic header to identify 
- *   slack space (UNALLOC) at the end of the file.
- * Assumes the a_start_blk is a valid start to an HBIN, 
- *   or else begins at the next valid HBIN.
  * @param a_start_blk The starting block number.  It is NOT the address or
  *   offset of the block in bytes.
  * @param a_end_blk The ending block number.  It is NOT the address or
@@ -621,6 +637,9 @@ reg_block_walk(TSK_FS_INFO * fs,
     REGFS_INFO *reg;
     TSK_DADDR_T blknum;
     uint8_t retval;
+    uint8_t in_unallocd = 0;
+    uint32_t last_hbin_length = 0;
+
     reg = (REGFS_INFO *) fs;
     
     tsk_error_reset();
@@ -665,12 +684,46 @@ reg_block_walk(TSK_FS_INFO * fs,
       return 1;
     }
 
-    uint8_t in_unallocd = 0;
+    // Handle edge case where the requested start block
+    //   falls in the middle of an HBIN with size greater than 4096 bytes.
+    // This is uncommon, but possible.
+    //
+    // So we:
+    //   Scan backwards to find "hbin" magic 4096 aligned, or the min HBIN.
+    //   See if this HBIN contains the start block requested
+    //   if so
+    //      then flag |= ALLOC
+    //   else
+    //      then flag |= UNALLOC
+    in_unallocd = 0;
+    if ( ! hbin_starts_here(fs, a_start_blk)) {
+      blknum = a_start_blk - 1;
+      while (blknum > fs->first_block) {
+	if (hbin_starts_here(fs, blknum)) {
+	  REGFS_HBIN hbin;
+	  ssize_t count;
+
+	  memset(&hbin, 0, sizeof(REGFS_HBIN));	  
+	  count = tsk_fs_read(fs, blknum * HBIN_SIZE, 
+			      (char *)&hbin, sizeof(REGFS_HBIN));
+	  if (count != sizeof(REGFS_HBIN)) {
+	    tsk_error_reset();
+	    tsk_error_set_errno(TSK_ERR_FS_READ);
+	    tsk_error_set_errstr("Failed to read HBIN header");
+	    return 1;
+	  }
+
+	  last_hbin_length = tsk_getu32(fs->endian, &hbin.length);
+	  if ((blknum + (last_hbin_length / HBIN_SIZE)) - 1 < a_start_blk) {
+	    in_unallocd = 1;
+	  }
+	  break;
+	}
+	blknum -= 1;
+      }
+    }
+    
     blknum = a_start_blk;
-
-    // should still do some scanning to figure out 
-    //   if we're currently in alloc'd or not
-
     while (blknum < a_end_blk)  {
       uint8_t block_buf[HBIN_SIZE];
       ssize_t count;
@@ -680,23 +733,11 @@ reg_block_walk(TSK_FS_INFO * fs,
         tsk_fprintf(stderr,
                     "\nregfs_block_walk: Reading block %"  PRIuDADDR 
                     " (offset %"  PRIuDADDR ")\n",
-                    blknum, blknum * 4096);
+                    blknum, blknum * HBIN_SIZE);
       }
 
       if ( ! in_unallocd) {
-	REGFS_HBIN hbin;
-	ssize_t count;
-
-	count = tsk_fs_read(fs, blknum * HBIN_SIZE, 
-			    (char *)&hbin, sizeof(REGFS_HBIN));
-	if (count != sizeof(REGFS_HBIN)) {
-	  tsk_error_reset();
-	  tsk_error_set_errno(TSK_ERR_FS_READ);
-	  tsk_error_set_errstr("Failed to read HBIN header");
-	  return 1;
-	}
-
-	if (tsk_getu32(fs->endian, &hbin) != 0x6e696268) { // "hbin"
+	if ( ! hbin_starts_here(fs, blknum)) {
 	  // we've found unalloc'd
 	  in_unallocd = 1;
 
@@ -704,8 +745,19 @@ reg_block_walk(TSK_FS_INFO * fs,
 	  continue;
 	} else {
 	  // still in alloc'd
+	  REGFS_HBIN hbin;
+	  ssize_t count;
 	  unsigned int i;
 	  uint32_t current_hbin_length;
+
+	  count = tsk_fs_read(fs, blknum * HBIN_SIZE, 
+			      (char *)&hbin, sizeof(REGFS_HBIN));
+	  if (count != sizeof(REGFS_HBIN)) {
+	    tsk_error_reset();
+	    tsk_error_set_errno(TSK_ERR_FS_READ);
+	    tsk_error_set_errstr("Failed to read HBIN header");
+	    return 1;
+	  }
 
 	  current_hbin_length = tsk_getu32(fs->endian, &hbin.length);
 
