@@ -794,7 +794,6 @@ tsk_fs_attr_walk_nonres(const TSK_FS_ATTR * fs_attr,
         TSK_DADDR_T addr, len_idx;
 
         addr = fs_attr_run->addr;
-
         /* cycle through each block in the run */
         for (len_idx = 0; len_idx < fs_attr_run->len; len_idx++) {
 
