@@ -27,6 +27,7 @@
 #include "tsk_ffs.h"
 #include "tsk_ext2fs.h"
 #include "tsk_fatfs.h"
+#include "tsk_xtaffs.h"
 
 
 static TSK_WALK_RET_ENUM
