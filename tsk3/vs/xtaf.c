@@ -35,7 +35,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     
     ssize_t cnt;
     unsigned int len;
-    fatfs_sb* fatsb;
+    xtaffs_sb* xtafsb;
     //EQS TODO: This may need to be malloc'ed
     char zeroth_part[] = "Partition0x80000";
     char first_part[] = "Partition0x80080000";
@@ -53,9 +53,9 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     tsk_error_reset();
 
 
-    len = sizeof(fatfs_sb);
-    fatsb = (fatfs_sb *) tsk_malloc(len);
-    if (fatsb == NULL) {
+    len = sizeof(xtaffs_sb);
+    xtafsb = (xtaffs_sb *) tsk_malloc(len);
+    if (xtafsb == NULL) {
         return NULL;
     }
     vs = (TSK_VS_INFO *) tsk_malloc(sizeof(*vs));
@@ -78,9 +78,9 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 
     //look for XTAF sig, if it isn't there return NULL
     for(itor = 0; itor <= 5; itor++){
-        /*  NOTE: This is read as a char* instead of a fatfs_sb to keep img_read() happy */
-        cnt = tsk_img_read(img_info, offsets[itor], (char *) fatsb, len);
-        if(strncmp((char*) fatsb->magic, "XTAF", 4)){
+        /*  NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy */
+        cnt = tsk_img_read(img_info, offsets[itor], (char *) xtafsb, len);
+        if(strncmp((char*) xtafsb->magic, "XTAF", 4)){
             printf("Part %d not XTAF file system\n", itor);
 //            return NULL;
             continue;
