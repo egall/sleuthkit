@@ -250,6 +250,8 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
             return ntfs_open(a_img_info, a_offset, a_ftype, 0);
         else if (TSK_FS_TYPE_ISFAT(a_ftype))
             return fatfs_open(a_img_info, a_offset, a_ftype, 0);
+        else if (TSK_FS_TYPE_ISXTAF(a_ftype))
+            return xtaffs_open(a_img_info, a_offset, a_ftype, 0);
         else if (TSK_FS_TYPE_ISFFS(a_ftype))
             return ffs_open(a_img_info, a_offset, a_ftype);
         else if (TSK_FS_TYPE_ISEXT(a_ftype))
