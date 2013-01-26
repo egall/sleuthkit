@@ -1,6 +1,6 @@
 #include "tsk_vs_i.h"
 #include "../fs/tsk_fs_i.h"
-#include "../fs/tsk_fatfs.h"
+#include "../fs/tsk_xtaffs.h"
 
 static void
 xtaf_close(TSK_VS_INFO * vs)
