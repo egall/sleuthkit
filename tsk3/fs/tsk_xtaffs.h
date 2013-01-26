@@ -12,12 +12,12 @@
 */
 
 /*
- * Contains the structures and function APIs for FATFS file system support.
+ * Contains the structures and function APIs for XTAFFS file system support.
  */
 
 
-#ifndef _TSK_FATFS_H
-#define _TSK_FATFS_H
+#ifndef _TSK_XTAFFS_H
+#define _TSK_XTAFFS_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,31 +26,31 @@ extern "C" {
 /*
 ** Constants
 */
-#define FATFS_FIRSTINO	2
-#define FATFS_ROOTINO	2       /* location of root directory inode */
-#define FATFS_FIRST_NORMINO 3
+#define XTAFFS_FIRSTINO	2
+#define XTAFFS_ROOTINO	2       /* location of root directory inode */
+#define XTAFFS_FIRST_NORMINO 3
 
     // special files go at end of inode list (before $OrphanFiles)
-#define FATFS_NUM_SPECFILE  4   // includes MBR, FAT1, FAT2, and Orphans
+#define XTAFFS_NUM_SPECFILE  4   // includes MBR, FAT1, FAT2, and Orphans
 
-#define FATFS_MBRINO(fs_info) \
+#define XTAFFS_MBRINO(fs_info) \
     (TSK_FS_ORPHANDIR_INUM(fs_info) - 3)        // inode for master boot record "special file"
-#define FATFS_MBRNAME   "$MBR"
+#define XTAFFS_MBRNAME   "$MBR"
 
-#define FATFS_FAT1INO(fs_info) \
+#define XTAFFS_FAT1INO(fs_info) \
     (TSK_FS_ORPHANDIR_INUM(fs_info) - 2)        // inode for FAT1 "special file"
-#define FATFS_FAT1NAME  "$FAT1"
+#define XTAFFS_FAT1NAME  "$FAT1"
 
-#define FATFS_FAT2INO(fs_info) \
+#define XTAFFS_FAT2INO(fs_info) \
     (TSK_FS_ORPHANDIR_INUM(fs_info) - 1)        // inode for FAT2 "special file"
-#define FATFS_FAT2NAME  "$FAT2"
+#define XTAFFS_FAT2NAME  "$FAT2"
 
 
-#define FATFS_SBOFF		0
-#define FATFS_FS_MAGIC	0xaa55
-#define FATFS_MAXNAMLEN	256
-#define FATFS_MAXNAMLEN_UTF8	1024
-#define FATFS_FILE_CONTENT_LEN sizeof(TSK_DADDR_T)      // we will store the starting cluster
+#define XTAFFS_SBOFF		0
+#define XTAFFS_FS_MAGIC	0xaa55
+#define XTAFFS_MAXNAMLEN	256
+#define XTAFFS_MAXNAMLEN_UTF8	1024
+#define XTAFFS_FILE_CONTENT_LEN sizeof(TSK_DADDR_T)      // we will store the starting cluster
 
 /* size of FAT to read into FATFS_INFO each time */
 /* This must be at least 1024 bytes or else fat12 will get messed up */
@@ -64,45 +64,45 @@ extern "C" {
 #define FATFS_32_MASK	0x0fffffff
 
 /* Constants for the FAT entry */
-#define FATFS_UNALLOC	0
-#define FATFS_BAD		0x0ffffff7
-#define FATFS_EOFS		0x0ffffff8
-#define FATFS_EOFE		0x0fffffff
+#define XTAFFS_UNALLOC	0
+#define XTAFFS_BAD		0x0ffffff7
+#define XTAFFS_EOFS		0x0ffffff8
+#define XTAFFS_EOFE		0x0fffffff
 
 
 
 /* macro to identify if the FAT value is End of File
  * returns 1 if it is and 0 if it is not 
  */
-#define FATFS_ISEOF(val, mask)	\
-	((val >= (FATFS_EOFS & mask)) && (val <= (FATFS_EOFE)))
+#define XTAFFS_ISEOF(val, mask)	\
+	((val >= (XTAFFS_EOFS & mask)) && (val <= (XTAFFS_EOFE)))
 
 
-#define FATFS_ISBAD(val, mask) \
-	((val) == (FATFS_BAD & mask))
+#define XTAFFS_ISBAD(val, mask) \
+	((val) == (XTAFFS_BAD & mask))
 
-#define FATFS_CLUST_2_SECT(fatfs, c)	\
-	(TSK_DADDR_T)(fatfs->firstclustsect + ((((c) & fatfs->mask) - 2) * fatfs->csize))
+#define XTAFFS_CLUST_2_SECT(xtaffs, c)	\
+	(TSK_DADDR_T)(xtaffs->firstclustsect + ((((c) & xtaffs->mask) - 2) * xtaffs->csize))
 
-#define FATFS_SECT_2_CLUST(fatfs, s)	\
-	(TSK_DADDR_T)(2 + ((s)  - fatfs->firstclustsect) / fatfs->csize)
+#define XTAFFS_SECT_2_CLUST(xtaffs, s)	\
+	(TSK_DADDR_T)(2 + ((s)  - xtaffs->firstclustsect) / xtaffs->csize)
 
 
 
 /* given an inode address, determine in which sector it is located
  * i must be larger than 3 (2 is the root and it doesn't have a sector)
  */
-#define FATFS_INODE_2_SECT(fatfs, i)    \
-    (TSK_DADDR_T)((i - FATFS_FIRST_NORMINO)/(fatfs->dentry_cnt_se) + fatfs->firstdatasect)
+#define XTAFFS_INODE_2_SECT(xtaffs, i)    \
+    (TSK_DADDR_T)((i - XTAFFS_FIRST_NORMINO)/(xtaffs->dentry_cnt_se) + xtaffs->firstdatasect)
 
-#define FATFS_INODE_2_OFF(fatfs, i)     \
-    (size_t)(((i - FATFS_FIRST_NORMINO) % fatfs->dentry_cnt_se) * sizeof(fatfs_dentry))
+#define XTAFFS_INODE_2_OFF(xtaffs, i)     \
+    (size_t)(((i - XTAFFS_FIRST_NORMINO) % xtaffs->dentry_cnt_se) * sizeof(xtaffs_dentry))
 
 
 /* Refrence Carrier FSF 231-232 Desc of sect to "inode addr" */
 /* given a sector IN THE DATA AREA, return the base inode for it */
-#define FATFS_SECT_2_INODE(fatfs, s)    \
-    (TSK_INUM_T)((s - fatfs->firstdatasect) * fatfs->dentry_cnt_se + FATFS_FIRST_NORMINO)
+#define XTAFFS_SECT_2_INODE(xtaffs, s)    \
+    (TSK_INUM_T)((s - xtaffs->firstdatasect) * xtaffs->dentry_cnt_se + XTAFFS_FIRST_NORMINO)
 
 
 
@@ -117,7 +117,7 @@ extern "C" {
         uint8_t numfat[4];
         uint8_t f5[2]; /* NULL expected */
         uint8_t f6[0xFEE];
-    } fatfs_sb;
+    } xtaffs_sb;
         
 
     typedef struct {
@@ -128,7 +128,7 @@ extern "C" {
         uint8_t nextfree[4];    /* next free cluster */
         uint8_t f2[12];
         uint8_t magic3[4];      /* AA550000 */
-    } fatfs_fsinfo;
+    } xtaffs_fsinfo;
 
 
 
@@ -162,20 +162,20 @@ extern "C" {
         uint8_t wtime[2];
 	uint8_t wdate[2];
 //        uint8_t highclust[2];
-    } fatfs_dentry;
+    } xtaffs_dentry;
 
 
 
 /* Macro to combine the upper and lower 2-byte parts of the starting
  * cluster 
  */
-#define FATFS_DENTRY_CLUST(fsi, de)	\
+#define XTAFFS_DENTRY_CLUST(fsi, de)	\
 	(TSK_DADDR_T)((tsk_getu32(fsi->endian, de->startclust))-0)
 
 /* constants for first byte of name[] */
-#define FATFS_SLOT_EMPTY	0x00
-#define FATFS_SLOT_E5		0x05    /* actual value is 0xe5 */
-#define FATFS_SLOT_DELETED	0xe5
+#define XTAFFS_SLOT_EMPTY	0x00
+#define XTAFFS_SLOT_E5		0x05    /* actual value is 0xe5 */
+#define XTAFFS_SLOT_DELETED	0xe5
 
 /* 
  *Return 1 if c is an valid charactor for a short file name 
@@ -184,7 +184,7 @@ extern "C" {
  * and name[1] and 0xe5 is allowed for name[0]
  */
 
-#define FATFS_IS_83_NAME(c)		\
+#define XTAFFS_IS_83_NAME(c)		\
 	((((c) < 0x20) || \
 	  ((c) == 0x22) || \
 	  (((c) >= 0x2a) && ((c) <= 0x2c)) || \
@@ -195,72 +195,72 @@ extern "C" {
 	  ((c) == 0x7c)) == 0)
 
 // extensions are to be ascii / latin
-#define FATFS_IS_83_EXT(c)		\
-    (FATFS_IS_83_NAME((c)) && ((c) < 0x7f))
+#define XTAFFS_IS_83_EXT(c)		\
+    (XTAFFS_IS_83_NAME((c)) && ((c) < 0x7f))
 
 
 
 /* flags for attributes field */
-#define FATFS_ATTR_NORMAL	0x00    /* normal file */
-#define FATFS_ATTR_READONLY	0x01    /* file is readonly */
-#define FATFS_ATTR_HIDDEN	0x02    /* file is hidden */
-#define FATFS_ATTR_SYSTEM	0x04    /* file is a system file */
-#define FATFS_ATTR_VOLUME	0x08    /* entry is a volume label */
-#define FATFS_ATTR_DIRECTORY	0x10    /* entry is a directory name */
-#define FATFS_ATTR_ARCHIVE	0x20    /* file is new or modified */
-#define FATFS_ATTR_LFN		0x0f    /* A long file name entry */
-#define FATFS_ATTR_ALL		0x3f    /* all flags set */
+#define XTAFFS_ATTR_NORMAL	0x00    /* normal file */
+#define XTAFFS_ATTR_READONLY	0x01    /* file is readonly */
+#define XTAFFS_ATTR_HIDDEN	0x02    /* file is hidden */
+#define XTAFFS_ATTR_SYSTEM	0x04    /* file is a system file */
+#define XTAFFS_ATTR_VOLUME	0x08    /* entry is a volume label */
+#define XTAFFS_ATTR_DIRECTORY	0x10    /* entry is a directory name */
+#define XTAFFS_ATTR_ARCHIVE	0x20    /* file is new or modified */
+#define XTAFFS_ATTR_LFN		0x0f    /* A long file name entry */
+#define XTAFFS_ATTR_ALL		0x3f    /* all flags set */
 
 /* flags for lowercase field */
-#define FATFS_CASE_LOWER_BASE	0x08    /* base is lower case */
-#define FATFS_CASE_LOWER_EXT	0x10    /* extension is lower case */
-#define FATFS_CASE_LOWER_ALL	0x18    /* both are lower */
+#define XTAFFS_CASE_LOWER_BASE	0x08    /* base is lower case */
+#define XTAFFS_CASE_LOWER_EXT	0x10    /* extension is lower case */
+#define XTAFFS_CASE_LOWER_ALL	0x18    /* both are lower */
 
-#define FATFS_SEC_MASK		0x001f    /* number of seconds div by 2 */
-#define FATFS_SEC_SHIFT		1
-#define FATFS_SEC_MIN		0
-#define FATFS_SEC_MAX		30
-#define FATFS_MIN_MASK		0x003f   /* number of minutes 0-59 */
-#define FATFS_MIN_SHIFT		5
-#define FATFS_MIN_MIN		0
-#define FATFS_MIN_MAX		59
-#define FATFS_HOUR_MASK		0xf800  /* number of hours 0-23 */
-#define FATFS_HOUR_SHIFT	11
-#define FATFS_HOUR_MIN		0
-#define FATFS_HOUR_MAX		23
+#define XTAFFS_SEC_MASK		0x001f    /* number of seconds div by 2 */
+#define XTAFFS_SEC_SHIFT		1
+#define XTAFFS_SEC_MIN		0
+#define XTAFFS_SEC_MAX		30
+#define XTAFFS_MIN_MASK		0x003f   /* number of minutes 0-59 */
+#define XTAFFS_MIN_SHIFT		5
+#define XTAFFS_MIN_MIN		0
+#define XTAFFS_MIN_MAX		59
+#define XTAFFS_HOUR_MASK		0xf800  /* number of hours 0-23 */
+#define XTAFFS_HOUR_SHIFT	11
+#define XTAFFS_HOUR_MIN		0
+#define XTAFFS_HOUR_MAX		23
 
-/* return 1 if x is a valid FAT time */
+/* return 1 if x is a valid XTAF time */
 
-#define FATFS_ISTIME(x)        \
-        (((((x & FATFS_SEC_MASK) << FATFS_SEC_SHIFT) < FATFS_SEC_MIN) || \
-          (((x & FATFS_SEC_MASK) << FATFS_SEC_SHIFT) > FATFS_SEC_MAX) || \
-          ((x >> FATFS_MIN_SHIFT & FATFS_MIN_MASK) < FATFS_MIN_MIN) || \
-          ((x >> FATFS_MIN_SHIFT & FATFS_MIN_MASK) > FATFS_MIN_MAX) || \
-          ((x >> FATFS_HOUR_SHIFT) > FATFS_MIN_MAX) || \
-          ((x  >> FATFS_HOUR_SHIFT) > FATFS_HOUR_MAX) ) == 0)
+#define XTAFFS_ISTIME(x)        \
+        (((((x & XTAFFS_SEC_MASK) << XTAFFS_SEC_SHIFT) < XTAFFS_SEC_MIN) || \
+          (((x & XTAFFS_SEC_MASK) << XTAFFS_SEC_SHIFT) > XTAFFS_SEC_MAX) || \
+          ((x >> XTAFFS_MIN_SHIFT & XTAFFS_MIN_MASK) < XTAFFS_MIN_MIN) || \
+          ((x >> XTAFFS_MIN_SHIFT & XTAFFS_MIN_MASK) > XTAFFS_MIN_MAX) || \
+          ((x >> XTAFFS_HOUR_SHIFT) > XTAFFS_MIN_MAX) || \
+          ((x  >> XTAFFS_HOUR_SHIFT) > XTAFFS_HOUR_MAX) ) == 0)
 
 
-#define FATFS_DAY_MASK		0x001f    /* day of month 1-31 */
-#define FATFS_DAY_SHIFT		0
-#define FATFS_DAY_MIN		1
-#define FATFS_DAY_MAX		31
-#define FATFS_MON_MASK		0x00f   /* month 1-12 */
-#define FATFS_MON_SHIFT		5
-#define FATFS_MON_MIN		1
-#define FATFS_MON_MAX		12
-#define FATFS_YEAR_MASK		0xfe00  /* year, from 1980 0-127 */
-#define FATFS_YEAR_SHIFT	9
-#define FATFS_YEAR_MIN		0
-#define FATFS_YEAR_MAX		127
-#define FATFS_YEAR_OFFSET       32 
+#define XTAFFS_DAY_MASK		0x001f    /* day of month 1-31 */
+#define XTAFFS_DAY_SHIFT		0
+#define XTAFFS_DAY_MIN		1
+#define XTAFFS_DAY_MAX		31
+#define XTAFFS_MON_MASK		0x00f   /* month 1-12 */
+#define XTAFFS_MON_SHIFT		5
+#define XTAFFS_MON_MIN		1
+#define XTAFFS_MON_MAX		12
+#define XTAFFS_YEAR_MASK		0xfe00  /* year, from 1980 0-127 */
+#define XTAFFS_YEAR_SHIFT	9
+#define XTAFFS_YEAR_MIN		0
+#define XTAFFS_YEAR_MAX		127
+#define XTAFFS_YEAR_OFFSET       32 
 
-/* return 1 if x is a valid FAT date */
-#define FATFS_ISDATE(x)        \
-         ((((x & FATFS_DAY_MASK) > FATFS_DAY_MAX) || \
-           ((x & FATFS_DAY_MASK) < FATFS_DAY_MIN) || \
-           ((x >> FATFS_MON_SHIFT & FATFS_MON_MASK) > FATFS_MON_MAX) || \
-           ((x >> FATFS_MON_SHIFT & FATFS_MON_MASK) < FATFS_MON_MIN) || \
-           (((x >> FATFS_YEAR_SHIFT) & FATFS_YEAR_MASK) > FATFS_YEAR_MAX) ) == 0)
+/* return 1 if x is a valid XTAF date */
+#define XTAFFS_ISDATE(x)        \
+         ((((x & XTAFFS_DAY_MASK) > XTAFFS_DAY_MAX) || \
+           ((x & XTAFFS_DAY_MASK) < XTAFFS_DAY_MIN) || \
+           ((x >> XTAFFS_MON_SHIFT & XTAFFS_MON_MASK) > XTAFFS_MON_MAX) || \
+           ((x >> XTAFFS_MON_SHIFT & XTAFFS_MON_MASK) < XTAFFS_MON_MIN) || \
+           (((x >> XTAFFS_YEAR_SHIFT) & XTAFFS_YEAR_MASK) > XTAFFS_YEAR_MAX) ) == 0)
 
 
 
@@ -278,14 +278,14 @@ extern "C" {
         uint8_t part2[12];
         uint8_t reserved2[2];
         uint8_t part3[4];
-    } fatfs_dentry_lfn;
+    } xtaffs_dentry_lfn;
 
 /* flags for seq field */
-#define FATFS_LFN_SEQ_FIRST	0x40    /* This bit is set for the first lfn entry */
-#define FATFS_LFN_SEQ_MASK	0x3f    /* These bits are a mask for the decreasing
+#define XTAFFS_LFN_SEQ_FIRST	0x40    /* This bit is set for the first lfn entry */
+#define XTAFFS_LFN_SEQ_MASK	0x3f    /* These bits are a mask for the decreasing
                                          * sequence number for the entries */
 
-/* internal FATFS_INFO structure */
+/* internal XTAFFS_INFO structure */
     typedef struct {
         TSK_FS_INFO fs_info;    /* super class */
         //TSK_DATA_BUF *table;      /* cached section of file allocation table */
@@ -297,9 +297,9 @@ extern "C" {
 
 
         char *dinodes;          /* cluster size buffer of inode list */
-        fatfs_sb *sb;
+        xtaffs_sb *sb;
 
-        fatfs_dentry *dep;
+        xtaffs_dentry *dep;
 
 
         /* FIrst sector of FAT */
@@ -339,33 +339,33 @@ extern "C" {
         TSK_INUM_T *par_buf;    // array that holds parent directory address of corresponding dir_buf entry
         size_t dir_buf_size;    // number of entries in both dif_buf and par_buf
         size_t dir_buf_next;    // index to the next place to store an address in dir_buf and par_buf
-    } FATFS_INFO;
+    } XTAFFS_INFO;
 
 
-    extern int8_t fatfs_is_sectalloc(FATFS_INFO *, TSK_DADDR_T);
-    extern int8_t fatfs_is_clustalloc(FATFS_INFO * fatfs,
+    extern int8_t xtaffs_is_sectalloc(XTAFFS_INFO *, TSK_DADDR_T);
+    extern int8_t xtaffs_is_clustalloc(XTAFFS_INFO * xtaffs,
         TSK_DADDR_T clust);
 
-    extern uint8_t fatfs_isdentry(FATFS_INFO *, fatfs_dentry *, uint8_t);
-    extern uint8_t fatfs_make_root(FATFS_INFO *, TSK_FS_META *);
+    extern uint8_t xtaffs_isdentry(XTAFFS_INFO *, xtaffs_dentry *, uint8_t);
+    extern uint8_t xtaffs_make_root(XTAFFS_INFO *, TSK_FS_META *);
 
-    extern uint8_t fatfs_inode_lookup(TSK_FS_INFO * fs,
+    extern uint8_t xtaffs_inode_lookup(TSK_FS_INFO * fs,
         TSK_FS_FILE * a_fs_file, TSK_INUM_T inum);
-    extern uint8_t fatfs_inode_walk(TSK_FS_INFO * fs,
+    extern uint8_t xtaffs_inode_walk(TSK_FS_INFO * fs,
         TSK_INUM_T start_inum, TSK_INUM_T end_inum,
         TSK_FS_META_FLAG_ENUM a_flags, TSK_FS_META_WALK_CB a_action,
         void *a_ptr);
-    extern uint8_t fatfs_make_data_run(TSK_FS_FILE * a_fs_file);
+    extern uint8_t xtaffs_make_data_run(TSK_FS_FILE * a_fs_file);
 
-    extern uint8_t fatfs_getFAT(FATFS_INFO * fatfs, TSK_DADDR_T clust,
+    extern uint8_t xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust,
         TSK_DADDR_T * value);
 
     extern TSK_RETVAL_ENUM
-        fatfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
+        xtaffs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
         TSK_INUM_T a_addr);
 
-    extern int fatfs_name_cmp(TSK_FS_INFO *, const char *, const char *);
-    extern uint8_t fatfs_dir_buf_add(FATFS_INFO * fatfs,
+    extern int xtaffs_name_cmp(TSK_FS_INFO *, const char *, const char *);
+    extern uint8_t xtaffs_dir_buf_add(XTAFFS_INFO * xtaffs,
         TSK_INUM_T par_inum, TSK_INUM_T dir_inum);
 
 
