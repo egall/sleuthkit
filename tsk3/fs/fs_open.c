@@ -134,7 +134,7 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
             tsk_error_reset();
         }
         if ((fs_info =
-                xtaffs_open(a_img_info, a_offset, TSK_FS_TYPE_FAT_DETECT,
+                xtaffs_open(a_img_info, a_offset, TSK_FS_TYPE_XTAF,
                     1)) != NULL) {
             if (set == NULL) {
                 set = "XTAF";

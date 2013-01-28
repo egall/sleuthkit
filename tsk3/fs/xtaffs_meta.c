@@ -568,7 +568,7 @@ xtaffs_make_root(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta)
         addr_ptr[0] = 1;
 
         cnum = 0;
-        while ((clust) && (0 == XTAFFS_ISEOF(clust, XTAFFS_32_MASK))) {
+        while ((clust) && (0 == XTAFFS_ISEOF(clust, FATFS_32_MASK))) {
             TSK_DADDR_T nxt;
 
             /* Make sure we do not get into an infinite loop */
