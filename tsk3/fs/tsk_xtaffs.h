@@ -99,7 +99,7 @@ extern "C" {
     (size_t)(((i - XTAFFS_FIRST_NORMINO) % xtaffs->dentry_cnt_se) * sizeof(xtaffs_dentry))
 
 
-/* Refrence Carrier FSF 231-232 Desc of sect to "inode addr" */
+/* (Reference: Carrier FSF 231-232 Desc of sect to "inode addr") */
 /* given a sector IN THE DATA AREA, return the base inode for it */
 #define XTAFFS_SECT_2_INODE(xtaffs, s)    \
     (TSK_INUM_T)((s - xtaffs->firstdatasect) * xtaffs->dentry_cnt_se + XTAFFS_FIRST_NORMINO)
