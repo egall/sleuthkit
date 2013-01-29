@@ -52,8 +52,8 @@ extern "C" {
         TSK_VS_TYPE_SUN = 0x0004,       ///< Sun VTOC
         TSK_VS_TYPE_MAC = 0x0008,       ///< Mac partition table
         TSK_VS_TYPE_GPT = 0x0010,       ///< GPT partition table
+        TSK_VS_TYPE_XTAF = 0x0012,      ///< XBOX 360 partition table
         TSK_VS_TYPE_DBFILLER = 0x00F0,  ///< fake partition table type for loaddb (for images that do not have a volume system)
-        TSK_VS_TYPE_XTAF = 0x00F1,
         TSK_VS_TYPE_UNSUPP = 0xffff,    ///< Unsupported
     } TSK_VS_TYPE_ENUM;
 
