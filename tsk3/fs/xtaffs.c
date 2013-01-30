@@ -774,14 +774,6 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     }
     else {
 
-        char *fat_fsinfo_buf;
-
-        if ((fat_fsinfo_buf = (char *)
-                tsk_malloc(sizeof(xtaffs_fsinfo))) == NULL) {
-            free(data_buf);
-            return 1;
-        }
-
         tsk_fprintf(hFile, "Serial number: 0x%" PRIx32 "\n",
             tsk_getu32(fs->endian, sb->serial_number));
 

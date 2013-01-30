@@ -120,15 +120,6 @@ extern "C" {
     } xtaffs_sb;
         
 
-    typedef struct {
-        uint8_t magic1[4];      /* 41615252 */
-        uint8_t f1[480];
-        uint8_t magic2[4];      /* 61417272 */
-        uint8_t freecnt[4];     /* free clusters 0xfffffffff if unknown */
-        uint8_t nextfree[4];    /* next free cluster */
-        uint8_t f2[12];
-        uint8_t magic3[4];      /* AA550000 */
-    } xtaffs_fsinfo;
 
 
 
