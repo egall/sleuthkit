@@ -142,7 +142,7 @@ is_83_name(xtaffs_dentry * de)
 ** Convert the DOS time to the UNIX version
 ** 
 ** UNIX stores the time in seconds from 1970 in UTC
-** FAT dates are the actual date with the year relative to 1980
+** FAT dates are the actual date with the min relative to 1980
 ** 
 */
 static time_t
@@ -159,29 +159,53 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
     memset(&tm1, 0, sizeof(struct tm));
 
     tm1.tm_sec = (time & XTAFFS_SEC_MASK) << XTAFFS_SEC_SHIFT;
-    if ((tm1.tm_sec < 0) || (tm1.tm_sec > 59))
+    if ((tm1.tm_sec < 0) || (tm1.tm_sec > 59)){
         tm1.tm_sec = 0;
+    }
+    else{
+ //      printf("sec = %d\n", tm1.tm_sec);
+
+    }
 
     // the ctimetens value has a range of 0 to 199
 //    if (timetens > 100)
 //        tm1.tm_sec++;
 
     tm1.tm_min = time >> XTAFFS_MIN_SHIFT & XTAFFS_MIN_MASK;
-    if ((tm1.tm_min < 0) || (tm1.tm_min > 59))
+    if ((tm1.tm_min < 0) || (tm1.tm_min > 59)){
         tm1.tm_min = 0;
+    }
+    else{
+ //      printf("min = %d\n", tm1.tm_min);
+
+    }
 
     tm1.tm_hour = time >> XTAFFS_HOUR_SHIFT;
-    if ((tm1.tm_hour < 0) || (tm1.tm_hour > 23))
+    if ((tm1.tm_hour < 0) || (tm1.tm_hour > 23)){
         tm1.tm_hour = 0;
+    }
+    else{
+     //  printf("hour = %d\n", tm1.tm_hour);
+
+    }
 
     tm1.tm_mday = date & XTAFFS_DAY_MASK;
-    if ((tm1.tm_mday < 1) || (tm1.tm_mday > 31))
+    if ((tm1.tm_mday < 1) || (tm1.tm_mday > 31)){
         tm1.tm_mday = 0;
+    }
+    else{
+   //    printf("mday = %d\n", tm1.tm_mday);
+
+    }
 
     tm1.tm_mon = date >> XTAFFS_MON_SHIFT & XTAFFS_MON_MASK;
-    if ((tm1.tm_mon < 0) || (tm1.tm_mon > 11))
+    if ((tm1.tm_mon < 0) || (tm1.tm_mon > 11)){
         tm1.tm_mon = 0;
-    
+    } 
+    else{
+ //      printf("mon = %d\n", tm1.tm_mon);
+
+    }
 
 
     /* There is a limit to the year because the UNIX time value is
@@ -189,8 +213,15 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
      * the maximum UNIX time is Tue Jan 19 03:14:07 2038
      */
     tm1.tm_year = (date >> XTAFFS_YEAR_SHIFT) + XTAFFS_YEAR_OFFSET;
-    if ((tm1.tm_year < 0) || (tm1.tm_year > 137))
+//    printf("Year = %d\n", (date >> XTAFFS_YEAR_SHIFT));
+    if ((tm1.tm_year < 0) || (tm1.tm_year > 137)){
         tm1.tm_year = 0;
+//        printf("Year broken\n Year = %d\n", tm1.tm_year);
+    }
+    else{
+//       printf("year = %d\n", tm1.tm_year);
+
+    }
 
     /* set the daylight savings variable to -1 so that mktime() figures
      * it out */
