@@ -146,12 +146,12 @@ extern "C" {
         char name[42];
         uint8_t startclust[4];
         uint8_t size[4];
-        uint8_t ctime[2];
         uint8_t cdate[2];
-        uint8_t atime[2];
+        uint8_t ctime[2];
         uint8_t adate[2];
-        uint8_t wtime[2];
+        uint8_t atime[2];
 	uint8_t wdate[2];
+        uint8_t wtime[2];
 //        uint8_t highclust[2];
     } xtaffs_dentry;
 
@@ -208,14 +208,14 @@ extern "C" {
 #define XTAFFS_CASE_LOWER_ALL	0x18    /* both are lower */
 
 #define XTAFFS_SEC_MASK		0x001f    /* number of seconds div by 2 */
-#define XTAFFS_SEC_SHIFT		1
+#define XTAFFS_SEC_SHIFT	1       /* Symbol provided for code symmetry */
 #define XTAFFS_SEC_MIN		0
 #define XTAFFS_SEC_MAX		30
-#define XTAFFS_MIN_MASK		0x003f   /* number of minutes 0-59 */
-#define XTAFFS_MIN_SHIFT		5
+#define XTAFFS_MIN_MASK		0x07e0   /* number of minutes 0-59 */
+#define XTAFFS_MIN_SHIFT	5
 #define XTAFFS_MIN_MIN		0
 #define XTAFFS_MIN_MAX		59
-#define XTAFFS_HOUR_MASK		0xf800  /* number of hours 0-23 */
+#define XTAFFS_HOUR_MASK	0xf800  /* number of hours 0-23 */
 #define XTAFFS_HOUR_SHIFT	11
 #define XTAFFS_HOUR_MIN		0
 #define XTAFFS_HOUR_MAX		23
@@ -225,33 +225,33 @@ extern "C" {
 #define XTAFFS_ISTIME(x)        \
         (((((x & XTAFFS_SEC_MASK) << XTAFFS_SEC_SHIFT) < XTAFFS_SEC_MIN) || \
           (((x & XTAFFS_SEC_MASK) << XTAFFS_SEC_SHIFT) > XTAFFS_SEC_MAX) || \
-          ((x >> XTAFFS_MIN_SHIFT & XTAFFS_MIN_MASK) < XTAFFS_MIN_MIN) || \
-          ((x >> XTAFFS_MIN_SHIFT & XTAFFS_MIN_MASK) > XTAFFS_MIN_MAX) || \
-          ((x >> XTAFFS_HOUR_SHIFT) > XTAFFS_MIN_MAX) || \
-          ((x  >> XTAFFS_HOUR_SHIFT) > XTAFFS_HOUR_MAX) ) == 0)
+          (((x & XTAFFS_MIN_MASK) >> XTAFFS_MIN_SHIFT) < XTAFFS_MIN_MIN) || \
+          (((x & XTAFFS_MIN_MASK) >> XTAFFS_MIN_SHIFT) > XTAFFS_MIN_MAX) || \
+          (((x & XTAFFS_HOUR_MASK) >> XTAFFS_HOUR_SHIFT) > XTAFFS_MIN_MAX) || \
+          (((x & XTAFFS_HOUR_MASK) >> XTAFFS_HOUR_SHIFT) > XTAFFS_HOUR_MAX) ) == 0)
 
 
 #define XTAFFS_DAY_MASK		0x001f    /* day of month 1-31 */
-#define XTAFFS_DAY_SHIFT		0
+#define XTAFFS_DAY_SHIFT	0
 #define XTAFFS_DAY_MIN		1
 #define XTAFFS_DAY_MAX		31
-#define XTAFFS_MON_MASK		0x00f   /* month 1-12 */
-#define XTAFFS_MON_SHIFT		5
+#define XTAFFS_MON_MASK		0x01e0   /* month 1-12 */
+#define XTAFFS_MON_SHIFT	5
 #define XTAFFS_MON_MIN		1
 #define XTAFFS_MON_MAX		12
-#define XTAFFS_YEAR_MASK		0xfe00  /* year, from 1980 0-127 */
+#define XTAFFS_YEAR_MASK	0xfe00  /* year, from 1980 0-127 */
 #define XTAFFS_YEAR_SHIFT	9
 #define XTAFFS_YEAR_MIN		0
 #define XTAFFS_YEAR_MAX		127
-#define XTAFFS_YEAR_OFFSET       32 
+#define XTAFFS_YEAR_OFFSET      80
 
 /* return 1 if x is a valid XTAF date */
 #define XTAFFS_ISDATE(x)        \
          ((((x & XTAFFS_DAY_MASK) > XTAFFS_DAY_MAX) || \
            ((x & XTAFFS_DAY_MASK) < XTAFFS_DAY_MIN) || \
-           ((x >> XTAFFS_MON_SHIFT & XTAFFS_MON_MASK) > XTAFFS_MON_MAX) || \
-           ((x >> XTAFFS_MON_SHIFT & XTAFFS_MON_MASK) < XTAFFS_MON_MIN) || \
-           (((x >> XTAFFS_YEAR_SHIFT) & XTAFFS_YEAR_MASK) > XTAFFS_YEAR_MAX) ) == 0)
+           (((x & XTAFFS_MON_MASK) >> XTAFFS_MON_SHIFT) > XTAFFS_MON_MAX) || \
+           (((x & XTAFFS_MON_MASK) >> XTAFFS_MON_SHIFT) < XTAFFS_MON_MIN) || \
+           (((x & XTAFFS_YEAR_MASK) >> XTAFFS_YEAR_SHIFT) > XTAFFS_YEAR_MAX) ) == 0)
 
 
 
