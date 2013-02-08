@@ -150,9 +150,6 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
 {
     struct tm tm1;
     time_t ret;
-    printf("\n\n\n\n\n\n##################lworking##############\n\n\n\n\n");
-    printf("Debug: date = %" PRIu16, date);
-    printf("Debug: time = %" PRIu16, time);
 
 /*
     if (date == 0)
@@ -160,56 +157,32 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
 */
 
     /* The time and date masks and shifts are from the py360 project */
+    /* The year offset py360 used, 1980, differs from the offset C's mktime() needed, 80.*/
     memset(&tm1, 0, sizeof(struct tm));
-    // sec is divided by 2? I don't know why
-    tm1.tm_sec = (time & XTAFFS_SEC_MASK) * 2; // << XTAFFS_SEC_SHIFT;
+    tm1.tm_sec = (time & XTAFFS_SEC_MASK) * 2;
     if ((tm1.tm_sec < 0) || (tm1.tm_sec > 59)){
         tm1.tm_sec = 0;
     }
-    else{
-       printf("sec = %d\n", tm1.tm_sec); //TODO Debug print
-
-    }
-
-    // the ctimetens value has a range of 0 to 199
-//    if (timetens > 100)
-//        tm1.tm_sec++;
 
     tm1.tm_min = (time & XTAFFS_MIN_MASK) >> XTAFFS_MIN_SHIFT ;
     if ((tm1.tm_min < 0) || (tm1.tm_min > 59)){
         tm1.tm_min = 0;
-    }
-    else{
-       printf("min = %d\n", tm1.tm_min);
-
     }
 
     tm1.tm_hour = (time & XTAFFS_HOUR_MASK) >> XTAFFS_HOUR_SHIFT;
     if ((tm1.tm_hour < 0) || (tm1.tm_hour > 23)){
         tm1.tm_hour = 0;
     }
-    else{
-       printf("hour = %d\n", tm1.tm_hour);
-
-    }
 
     tm1.tm_mday = (date & XTAFFS_DAY_MASK) >> XTAFFS_DAY_SHIFT;
     if ((tm1.tm_mday < 1) || (tm1.tm_mday > 31)){
         tm1.tm_mday = 0;
-    }
-    else{
-       printf("mday = %d\n", tm1.tm_mday);
-
     }
 
     tm1.tm_mon = (date & XTAFFS_MON_MASK) >> XTAFFS_MON_SHIFT ;
     if ((tm1.tm_mon < 0) || (tm1.tm_mon > 11)){
         tm1.tm_mon = 0;
     } 
-    else{
-       printf("mon = %d\n", tm1.tm_mon);
-
-    }
 
 
     /* There is a limit to the year because the UNIX time value is
@@ -220,10 +193,8 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
     /* The check against 127: There are only 7 bits that are supposed to be used for the year value.  If that comes out to bigger than 127, something went wrong. */
     if ((tm1.tm_year < 0) || (tm1.tm_year > 127)){
         tm1.tm_year = 0;
-        printf("Year broken\n Year = %d\n", tm1.tm_year);
     }
     else{
-       printf("year = %d\n", tm1.tm_year);
        tm1.tm_year += XTAFFS_YEAR_OFFSET;
     }
 
@@ -243,7 +214,7 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
                 ((time & XTAFFS_SEC_MASK) >> XTAFFS_SEC_SHIFT) * 2,
                 ((date & XTAFFS_MON_MASK) >> XTAFFS_MON_SHIFT) - 1,
                 ((date & XTAFFS_DAY_MASK) >> XTAFFS_DAY_SHIFT),
-                ((date & XTAFFS_YEAR_MASK) >> XTAFFS_YEAR_SHIFT) + 80);
+                ((date & XTAFFS_YEAR_MASK) >> XTAFFS_YEAR_SHIFT) + XTAFFS_YEAR_OFFSET);
         return 0;
     }
 
