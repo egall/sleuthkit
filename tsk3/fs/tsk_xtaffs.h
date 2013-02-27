@@ -2,7 +2,7 @@
 ** The Sleuth Kit 
 **
 ** Brian Carrier [carrier <at> sleuthkit [dot] org]
-** Copyright (c) 2003-2008 Brian Carrier.  All rights reserved
+** Copyright (c) 2003-2011 Brian Carrier.  All rights reserved
 **
 ** TASK
 ** Copyright (c) 2002 @stake Inc.  All rights reserved
@@ -282,16 +282,13 @@ extern "C" {
         //TSK_DATA_BUF *table;      /* cached section of file allocation table */
 
         /* FAT cache */
-        char fatc_buf[FAT_CACHE_N][FAT_CACHE_B];
-        TSK_DADDR_T fatc_addr[FAT_CACHE_N];
-        uint8_t fatc_ttl[FAT_CACHE_N];  // ttl of 0 means is not in use
+        /* cache_lock protects fatc_buf, fatc_addr, fatc_ttl */
+        tsk_lock_t cache_lock;
+        char fatc_buf[FAT_CACHE_N][FAT_CACHE_B];        //r/w shared - lock
+        TSK_DADDR_T fatc_addr[FAT_CACHE_N];     // r/w shared - lock
+        uint8_t fatc_ttl[FAT_CACHE_N];  //r/w shared - lock
 
-
-        char *dinodes;          /* cluster size buffer of inode list */
         xtaffs_sb *sb;
-
-        xtaffs_dentry *dep;
-
 
         /* FIrst sector of FAT */
         TSK_DADDR_T firstfatsect;
@@ -326,10 +323,8 @@ extern "C" {
         uint16_t numroot;       /* number of 32-byte dentries in root dir */
         uint32_t mask;          /* the mask to use for the sectors */
 
-        TSK_INUM_T *dir_buf;    // array that holds inode address of directories
-        TSK_INUM_T *par_buf;    // array that holds parent directory address of corresponding dir_buf entry
-        size_t dir_buf_size;    // number of entries in both dif_buf and par_buf
-        size_t dir_buf_next;    // index to the next place to store an address in dir_buf and par_buf
+        tsk_lock_t dir_lock;    //< Lock that protects inum2par.
+        void *inum2par;         //< Maps subfolder metadata address to parent folder metadata addresses.
     } XTAFFS_INFO;
 
 
@@ -339,6 +334,8 @@ extern "C" {
 
     extern uint8_t xtaffs_isdentry(XTAFFS_INFO *, xtaffs_dentry *, uint8_t);
     extern uint8_t xtaffs_make_root(XTAFFS_INFO *, TSK_FS_META *);
+    extern uint8_t xtaffs_dinode_load(TSK_FS_INFO *, xtaffs_dentry *,
+        TSK_INUM_T);
 
     extern uint8_t xtaffs_inode_lookup(TSK_FS_INFO * fs,
         TSK_FS_FILE * a_fs_file, TSK_INUM_T inum);
@@ -358,6 +355,8 @@ extern "C" {
     extern int xtaffs_name_cmp(TSK_FS_INFO *, const char *, const char *);
     extern uint8_t xtaffs_dir_buf_add(XTAFFS_INFO * xtaffs,
         TSK_INUM_T par_inum, TSK_INUM_T dir_inum);
+    extern void xtaffs_cleanup_ascii(char *);
+    extern void xtaffs_dir_buf_free(XTAFFS_INFO *xtaffs);
 
 
 #ifdef __cplusplus
