@@ -143,8 +143,8 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
                 fs_set->close(fs_set);
                 fs_info->close(fs_info);
                 tsk_error_reset();
-                tsk_errno = TSK_ERR_FS_UNKTYPE;
-                snprintf(tsk_errstr, TSK_ERRSTR_L, "XTAF or %s", set);
+                tsk_error_set_errno(TSK_ERR_FS_UNKTYPE);
+                tsk_error_set_errstr("XTAF or %s", set);
                 return NULL;
             }
         }
