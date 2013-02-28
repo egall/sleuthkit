@@ -16,6 +16,7 @@
 
 #include "tsk_fs_i.h"
 #include "tsk_fatfs.h"
+#include "tsk_xtaffs.h"
 
 
 /** \internal
