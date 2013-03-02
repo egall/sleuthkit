@@ -747,6 +747,7 @@ extern "C" {
         TSK_FS_TYPE_EXT2 = 0x00000080,  ///< Ext2 file system
         TSK_FS_TYPE_EXT3 = 0x00000100,  ///< Ext3 file system
         TSK_FS_TYPE_EXT_DETECT = 0x00000180,    ///< ExtX auto detection
+        TSK_FS_TYPE_XTAF = 0x01000000,  ///< XTAF file system
         TSK_FS_TYPE_SWAP = 0x00000200,  ///< SWAP file system
         TSK_FS_TYPE_SWAP_DETECT = 0x00000200,   ///< SWAP auto detection
         TSK_FS_TYPE_RAW = 0x00000400,   ///< RAW file system
@@ -776,6 +777,13 @@ extern "C" {
     /**
     * \ingroup fslib
     * Macro that takes a file system type and returns 1 if the type
+         * is for a XTAF file system. */
+#define TSK_FS_TYPE_ISXTAF(ftype) \
+        (((ftype) & TSK_FS_TYPE_XTAF)?1:0)
+
+        /**
+        * \ingroup fslib
+         * Macro that takes a file system type and returns 1 if the type
     * is for a FFS file system. */
 #define TSK_FS_TYPE_ISFFS(ftype) \
     (((ftype) & TSK_FS_TYPE_FFS_DETECT)?1:0)
