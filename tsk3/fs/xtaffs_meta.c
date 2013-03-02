@@ -1,11 +1,11 @@
 /*
 ** xtaffs
-** The Sleuth Kit 
+** The Sleuth Kit
 **
-** Content and meta data layer support for the FAT file system 
+** Content and meta data layer support for the FAT file system
 **
 ** Brian Carrier [carrier <at> sleuthkit [dot] org]
-** Copyright (c) 2006-2008 Brian Carrier, Basis Technology.  All Rights reserved
+** Copyright (c) 2006-2011 Brian Carrier, Basis Technology.  All Rights reserved
 ** Copyright (c) 2003-2005 Brian Carrier.  All rights reserved 
 **
 ** TASK
@@ -20,14 +20,12 @@
 
 /**
  * \file xtaffs_meta.c
- * Contains the internal TSK FAT file system code to handle metadata structures. 
+ * Contains the internal TSK FAT file system code to handle metadata structures.
  */
 #include "tsk_fs_i.h"
 #include "tsk_xtaffs.h"
 
-
-
-/* 
+/*
  * Identify if the dentry is a valid 8.3 name
  *
  * returns 1 if it is, 0 if it does not
@@ -117,7 +115,7 @@ is_83_name(xtaffs_dentry * de)
     /* Ensure that if we get a "space", that the rest of the
      * name is spaces.  This is not in the spec, but is how
      * windows operates and serves as a good check to remove 
-     * false positives.  We do not do this check for the 
+     * false positives.  We do not do this check for the
      * volume label though. */
     if ((de->attrib & XTAFFS_ATTR_VOLUME) != XTAFFS_ATTR_VOLUME) {
         if (((de->name[1] == 0x20) && (de->name[2] != 0x20)) ||
@@ -140,7 +138,7 @@ is_83_name(xtaffs_dentry * de)
 
 /*
 ** Convert the DOS time to the UNIX version
-** 
+**
 ** UNIX stores the time in seconds from 1970 in UTC
 ** FAT dates are the actual date with the min relative to 1980
 ** 
@@ -186,7 +184,7 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
 
 
     /* There is a limit to the year because the UNIX time value is
-     * a 32-bit value 
+     * a 32-bit value
      * the maximum UNIX time is Tue Jan 19 03:14:07 2038
      */
     tm1.tm_year = (date & XTAFFS_YEAR_MASK ) >> XTAFFS_YEAR_SHIFT;
@@ -208,7 +206,7 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
     if (ret < 0) {
         if (tsk_verbose)
             tsk_fprintf(stderr,
-                "dos2unixtime: Error running mktime(): %d:%d:%d %d/%d/%d",
+                "dos2unixtime: Error running mktime() on: %d:%d:%d %d/%d/%d\n",
                 ((time & XTAFFS_HOUR_MASK) >> XTAFFS_HOUR_SHIFT),
                 ((time & XTAFFS_MIN_MASK) >> XTAFFS_MIN_SHIFT),
                 ((time & XTAFFS_SEC_MASK) >> XTAFFS_SEC_SHIFT) * 2,
@@ -230,7 +228,7 @@ dos2nanosec(uint8_t timetens)
 }
 
 
-/* 
+/*
  * convert the attribute list in FAT to a UNIX mode 
  */
 static TSK_FS_META_TYPE_ENUM
@@ -270,6 +268,26 @@ attr2mode(uint16_t attr)
 
 
 /** 
+ * Cleans up a char string so that it is only ASCII. We do this
+ * before we copy something into a TSK buffer that is supposed 
+ * to be UTF-8.  If it is not ASCII and it is from a single-byte
+ * data structure, then we we clean it up because we dont' know
+ * what the actual encoding is (or if it is corrupt). 
+ * @param name Name to cleanup
+ */
+void
+xtaffs_cleanup_ascii(char *name)
+{
+    int i;
+    for (i = 0; name[i] != '\0'; i++) {
+        if ((unsigned char) (name[i]) > 0x7e) {
+            name[i] = '^';
+        }
+    }
+}
+
+
+/**
  * \internal
  * Copy the contents of a raw directry entry into a TSK_FS_INFO structure.
  *
@@ -282,7 +300,7 @@ attr2mode(uint16_t attr)
  *
  * @returns 1 on error and 0 on success.  Errors should only occur for
  * Unicode conversion problems and when this occurs the name will be
- * NULL terminated (but with unknown contents). 
+ * NULL terminated (but with unknown contents).
  *
  */
 static TSK_RETVAL_ENUM
@@ -400,11 +418,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
          * copying it into a buffer that is supposed to be UTF-8 and
          * we don't know what encoding it is actually in or if it is 
          * simply junk. */
-        for (i = 0; fs_meta->name2->name[i] != '\0'; i++) {
-            if ((unsigned char)(fs_meta->name2->name[i]) > 0x7e) {
-                fs_meta->name2->name[i] = '^';
-            }
-        }
+        xtaffs_cleanup_ascii(fs_meta->name2->name);
     }
     /* If the entry is a normal short entry, then copy the name
      * and add the '.' for the extension
@@ -423,11 +437,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
          * copying it into a buffer that is supposed to be UTF-8 and
          * we don't know what encoding it is actually in or if it is 
          * simply junk. */
-        for (i = 0; fs_meta->name2->name[i] != '\0'; i++) {
-            if ((unsigned char)(fs_meta->name2->name[i]) > 0x7e) {
-                fs_meta->name2->name[i] = '^';
-            }
-        }
+        xtaffs_cleanup_ascii(fs_meta->name2->name);
     }
 
     /* Clean up name to remove control characters */
@@ -445,7 +455,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
     addr_ptr[0] = XTAFFS_DENTRY_CLUST(fs, in) & xtaffs->mask;
 
     /* FAT does not store a size for its directories so make one based
-     * on the number of allocated sectors 
+     * on the number of allocated sectors
      */
     if ((in->attrib & XTAFFS_ATTR_DIRECTORY) &&
         ((in->attrib & XTAFFS_ATTR_LFN) != XTAFFS_ATTR_LFN)) {
@@ -489,7 +499,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
         /* if the dir is unallocated, then assume 0 or cluster size
          * Ideally, we would have a smart algo here to do recovery
          * and look for dentries.  However, we do not have that right
-         * now and if we do not add this special check then it can 
+         * now and if we do not add this special check then it can
          * assume that an allocated file cluster chain belongs to the
          * directory */
         else {
@@ -511,7 +521,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
  * \internal
  * Create an FS_INODE structure for the root directory.  FAT does
  * not have a directory entry for the root directory, but this
- * function collects the needed data to make one. 
+ * function collects the needed data to make one.
  *
  * @param xtaffs File system to analyze
  * @param fs_meta Inode structure to copy root directory information into.
@@ -547,13 +557,13 @@ xtaffs_make_root(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta)
     }
     addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
 
-    /* TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16 don't use the FAT for root directory, so 
+    /* TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16 don't use the FAT for root directory, so
      * we will have to fake it.
      */
     if (xtaffs->fs_info.ftype != TSK_FS_TYPE_FAT32) {
         TSK_DADDR_T snum;
 
-        /* Other code will have to check this as a special condition 
+        /* Other code will have to check this as a special condition
          */
         addr_ptr[0] = 1;
 
@@ -607,7 +617,7 @@ xtaffs_make_root(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta)
 
 
 /* 
- * Is the pointed to buffer a directory entry buffer? 
+ * Is the pointed to buffer a directory entry buffer?
  *
  * @param a_basic 1 if only basic tests should be performed. 
  * Returns 1 if it is, 0 if not
@@ -638,15 +648,20 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
             }
 
             // verify we do not have too many flags set
-            if (de->attrib & XTAFFS_ATTR_NORMAL) {
-                if ((de->attrib & XTAFFS_ATTR_VOLUME) ||
-                    (de->attrib & XTAFFS_ATTR_DIRECTORY)) {
-                    if (tsk_verbose)
-                        fprintf(stderr,
-                            "xtaffs_isdentry: Normal and Vol/Dir\n");
-                    return 0;
-                }
-            }
+            /*
+               // This is a useless check because FATFS_ATTR_NORMAL is 0x00
+               // keeping it here for future reference.
+               if (de->attrib & XTAFFS_ATTR_NORMAL) {
+               if ((de->attrib & XTAFFS_ATTR_VOLUME) ||
+               (de->attrib & XTAFFS_ATTR_DIRECTORY)) {
+               if (tsk_verbose)
+               fprintf(stderr,
+               "xtaffs_isdentry: Normal and Vol/Dir\n");
+               return 0;
+               }
+               }
+             */
+
             if (de->attrib & XTAFFS_ATTR_VOLUME) {
                 if ((de->attrib & XTAFFS_ATTR_DIRECTORY) ||
                     (de->attrib & XTAFFS_ATTR_READONLY) ||
@@ -657,10 +672,13 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
                     return 0;
                 }
             }
-        
+
 
             /* The ctime, cdate, and adate fields are optional and 
              * therefore 0 is a valid value
+             * We have had scenarios where ISDATE and ISTIME return true,
+             * but the unix2dos fail during the conversion.  This has been
+             * useful to detect corrupt entries, so we do both. 
              */
             if ((tsk_getu16(fs->endian, de->ctime) != 0) &&
                 (XTAFFS_ISTIME(tsk_getu16(fs->endian, de->ctime)) == 0)) {
@@ -675,19 +693,26 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
                 return 0;
             }
             else if ((tsk_getu16(fs->endian, de->cdate) != 0) &&
-                (XTAFFS_ISDATE(tsk_getu16(fs->endian, de->cdate)) == 0)) {
+                ((XTAFFS_ISDATE(tsk_getu16(fs->endian, de->cdate)) == 0) ||
+                    (dos2unixtime(tsk_getu16(fs->endian, de->cdate),
+                            tsk_getu16(fs->endian, de->ctime),
+                            de->ctimeten) == 0))) {
                 if (tsk_verbose)
                     fprintf(stderr, "xtaffs_isdentry: cdate\n");
                 return 0;
             }
             else if ((tsk_getu16(fs->endian, de->adate) != 0) &&
-                (XTAFFS_ISDATE(tsk_getu16(fs->endian, de->adate)) == 0)) {
+                ((XTAFFS_ISDATE(tsk_getu16(fs->endian, de->adate)) == 0) ||
+                    (dos2unixtime(tsk_getu16(fs->endian, de->adate),
+                            0, 0) == 0))) {
                 if (tsk_verbose)
                     fprintf(stderr, "xtaffs_isdentry: adate\n");
                 return 0;
             }
             else if ((tsk_getu16(fs->endian, de->wdate) != 0) &&
-                (XTAFFS_ISDATE(tsk_getu16(fs->endian, de->wdate)) == 0)) {
+                ((XTAFFS_ISDATE(tsk_getu16(fs->endian, de->wdate)) == 0) ||
+                    (dos2unixtime(tsk_getu16(fs->endian, de->wdate),
+                            tsk_getu16(fs->endian, de->wtime), 0) == 0))) {
                 if (tsk_verbose)
                     fprintf(stderr, "xtaffs_isdentry: wdate\n");
                 return 0;
@@ -748,7 +773,7 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
 /**************************************************************************
  *
  * INODE WALKING
- * 
+ *
  *************************************************************************/
 /* Mark the sector used in the bitmap */
 static TSK_WALK_RET_ENUM
@@ -778,6 +803,57 @@ inode_walk_dent_act(TSK_FS_FILE * fs_file, const char *a_path, void *a_ptr)
     return TSK_WALK_CONT;
 }
 
+/* fatfs_dinode_load - look up disk inode & load into fatfs_dentry structure
+ *
+ * return 1 on error and 0 on success
+ * */
+
+uint8_t
+xtaffs_dinode_load(TSK_FS_INFO * fs, xtaffs_dentry * dep, TSK_INUM_T inum)
+{
+
+    XTAFFS_INFO *xtaffs = (XTAFFS_INFO *) fs;
+    ssize_t cnt;
+    size_t off;
+    TSK_DADDR_T sect;
+
+    /*
+     * Sanity check.
+     * Account for virtual Orphan directory and virtual files
+     */
+    if ((inum < fs->first_inum)
+        || (inum > fs->last_inum - XTAFFS_NUM_SPECFILE)) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("fatfs_dinode_load: address: %" PRIuINUM,
+            inum);
+        return 1;
+    }                           /* Get the sector that this inode would be in and its offset */
+    sect = XTAFFS_INODE_2_SECT(xtaffs, inum);
+    off = XTAFFS_INODE_2_OFF(xtaffs, inum);
+
+    if (sect > fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("xtaffs_inode_load Inode %" PRIuINUM
+            " in sector too big for image: %" PRIuDADDR, inum, sect);
+        return 1;
+    }
+
+
+    cnt = tsk_fs_read(fs, sect * fs->block_size + off, (char *) dep, sizeof(xtaffs_dentry));     //a_len = xtaffs->ssize?
+    if (cnt != sizeof(xtaffs_dentry)) {
+        if (cnt >= 0) {
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_READ);
+        }
+        tsk_error_set_errstr2("xtaffs_inode_load: block: %" PRIuDADDR,
+            sect);
+        return 1;
+    }
+
+    return 0;
+}
 
 /*
  * walk the inodes
@@ -796,12 +872,12 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     TSK_INUM_T end_inum_tmp;
     TSK_FS_FILE *fs_file;
     TSK_DADDR_T sect, ssect, lsect;
+    char *dino_buf;
     xtaffs_dentry *dep;
     unsigned int myflags, didx;
     uint8_t *sect_alloc;
     ssize_t cnt;
     uint8_t done = 0;
-    char *dinode_buf = NULL;
 
     // clean up any error messages that are lying around
     tsk_error_reset();
@@ -811,17 +887,17 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
      */
     if (start_inum < fs->first_inum || start_inum > fs->last_inum) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "%s: Start inode:  %" PRIuINUM "", myname, start_inum);
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr("%s: Start inode:  %" PRIuINUM "", myname,
+            start_inum);
         return 1;
     }
     else if (end_inum < fs->first_inum || end_inum > fs->last_inum
         || end_inum < start_inum) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "%s: End inode: %" PRIuINUM "", myname, end_inum);
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr("%s: End inode: %" PRIuINUM "", myname,
+            end_inum);
         return 1;
     }
 
@@ -844,7 +920,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             a_flags |= (TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC);
         }
 
-        /* If neither of the USED or UNUSED a_flags are set, then set them 
+        /* If neither of the USED or UNUSED a_flags are set, then set them
          * both
          */
         if (((a_flags & TSK_FS_META_FLAG_USED) == 0) &&
@@ -856,15 +932,13 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
     /* If we are looking for orphan files and have not yet filled
      * in the list of unalloc inodes that are pointed to, then fill
-     * in the list 
+     * in the list
      */
-    if ((a_flags & TSK_FS_META_FLAG_ORPHAN)
-        && (fs->list_inum_named == NULL)) {
+    if ((a_flags & TSK_FS_META_FLAG_ORPHAN)) {
 
         if (tsk_fs_dir_load_inum_named(fs) != TSK_OK) {
-            strncat(tsk_errstr2,
-                " - xtaffs_inode_walk: identifying inodes allocated by file names",
-                TSK_ERRSTR_L);
+            tsk_error_errstr2_concat
+                (" - xtaffs_inode_walk: identifying inodes allocated by file names");
             return 1;
         }
     }
@@ -903,7 +977,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         /* advance it so that it is a valid starting point */
         start_inum++;
 
-        // exit if that is all that was requested 
+        // exit if that is all that was requested
         if (start_inum == end_inum) {
             tsk_fs_file_close(fs_file);
             return 0;
@@ -914,15 +988,11 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
      * entries.  We can make mistakes and ignore sectors that have valid
      * entries in them.  To make sure we at least get all sectors that
      * are allocated by directories in the directory tree, we will
-     * run name_walk and then a file walk on each dir. 
+     * run name_walk and then a file walk on each dir.
      * We'll be make sure to print those.  We skip this for ORPHAN hunting
-     * because it doesn't help and can introduce infinite loop situations  
+     * because it doesn't help and can introduce infinite loop situations
      * inode_walk was called by the function that determines which inodes
      * are orphans. */
-    if (tsk_verbose)
-        tsk_fprintf(stderr,
-            "xtaffs_inode_walk: Walking directories to collect sector info\n");
-
     if ((sect_alloc =
             (uint8_t *) tsk_malloc((size_t) ((fs->block_count +
                         7) / 8))) == NULL) {
@@ -930,6 +1000,10 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         return 1;
     }
     if ((a_flags & TSK_FS_META_FLAG_ORPHAN) == 0) {
+
+        if (tsk_verbose)
+            tsk_fprintf(stderr,
+                "xtaffs_inode_walk: Walking directories to collect sector info\n");
 
         // Do a file_walk on the root directory to get its layout
         if (xtaffs_make_root(xtaffs, fs_file->meta)) {
@@ -946,13 +1020,13 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             return 1;
         }
 
-        // now get the rest of the directories. 
+        // now get the rest of the directories.
         if (tsk_fs_dir_walk(fs, fs->root_inum,
                 TSK_FS_DIR_WALK_FLAG_ALLOC | TSK_FS_DIR_WALK_FLAG_RECURSE |
                 TSK_FS_DIR_WALK_FLAG_NOORPHAN, inode_walk_dent_act,
                 (void *) sect_alloc)) {
-            strncat(tsk_errstr2,
-                " - xtaffs_inode_walk: mapping directories", TSK_ERRSTR_L);
+            tsk_error_errstr2_concat
+                (" - xtaffs_inode_walk: mapping directories");
             tsk_fs_file_close(fs_file);
             free(sect_alloc);
             return 1;
@@ -961,18 +1035,17 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
     /*AJN: At this point, sect_alloc has a bit set for all of the used sectors of the partition, with the very first possible bit set being 80 (it may be later if the walk started at a non-root sector) .*/
 
-
     /* start analyzing each sector
      *
      * Perform a test on the first 32 bytes of each sector to identify if
      * the sector contains directory entries.  If it does, then continue
-     * to analyze it.  If not, then read the next sector 
+     * to analyze it.  If not, then read the next sector
      */
 
     /* identify the starting and ending inodes sector addrs */
 
-    /* we need to handle end_inum specially if it is for the 
-     * virtual ORPHANS directory or virtual FAT files.  
+    /* we need to handle end_inum specially if it is for the
+     * virtual ORPHANS directory or virtual FAT files.
      * Handle these outside of the loop. */
     if (end_inum > fs->last_inum - XTAFFS_NUM_SPECFILE)
         end_inum_tmp = fs->last_inum - XTAFFS_NUM_SPECFILE;
@@ -985,9 +1058,9 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
     if (ssect > fs->last_block) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_inode_walk: Starting inode in sector too big for image: %"
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr
+            ("xtaffs_inode_walk: Starting inode in sector too big for image: %"
             PRIuDADDR, ssect);
         tsk_fs_file_close(fs_file);
         free(sect_alloc);
@@ -995,30 +1068,31 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
     }
     else if (lsect > fs->last_block) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_inode_walk: Ending inode in sector too big for image: %"
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr
+            ("xtaffs_inode_walk: Ending inode in sector too big for image: %"
             PRIuDADDR, lsect);
         tsk_fs_file_close(fs_file);
         free(sect_alloc);
         return 1;
     }
 
-    if ((dinode_buf = tsk_malloc(xtaffs->csize * xtaffs->ssize)) == NULL) {
+    sect = ssect;
+    if ((dino_buf =
+            (char *) tsk_malloc(xtaffs->csize << xtaffs->ssize_sh)) ==
+        NULL) {
         tsk_fs_file_close(fs_file);
         free(sect_alloc);
         return 1;
     }
-
-    sect = ssect;
     while (sect <= lsect) {
         int clustalloc;         // 1 if current sector / cluster is allocated
         size_t sect_proc;       // number of sectors read for this loop
         size_t sidx;            // sector index for loop
+        uint8_t basicTest;      // 1 if only a basic dentry test is needed
 
-
-        /* This occurs for the root directory of TSK_FS_TYPE_FAT12/16 
-         * 
+        /* This occurs for the root directory of TSK_FS_TYPE_FAT12/16
+         *
          * We are going to process the image in clusters, so take care of the root
          * directory seperately.
          */
@@ -1033,19 +1107,18 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             clustalloc = 1;
 
             /* read the sector */
-            cnt =
-                tsk_fs_read_block(fs, sect, dinode_buf, xtaffs->ssize);
+            cnt = tsk_fs_read_block(fs, sect, dino_buf, xtaffs->ssize);
             if (cnt != xtaffs->ssize) {
                 if (cnt >= 0) {
                     tsk_error_reset();
-                    tsk_errno = TSK_ERR_FS_READ;
+                    tsk_error_set_errno(TSK_ERR_FS_READ);
                 }
-                snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                    "xtaffs_inode_walk (root dir): sector: %" PRIuDADDR,
+                tsk_error_set_errstr2
+                    ("xtaffs_inode_walk (root dir): sector: %" PRIuDADDR,
                     sect);
                 tsk_fs_file_close(fs_file);
                 free(sect_alloc);
-                free(dinode_buf);
+                free(dino_buf);
                 return 1;
             }
             sect_proc = 1;
@@ -1058,7 +1131,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 XTAFFS_CLUST_2_SECT(xtaffs, (XTAFFS_SECT_2_CLUST(xtaffs,
                         sect)));
 
-            /* if the cluster is not allocated, then do not go into it if we 
+            /* if the cluster is not allocated, then do not go into it if we
              * only want allocated/link entries
              * If it is allocated, then go into it no matter what
              */
@@ -1066,7 +1139,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             if (clustalloc == -1) {
                 tsk_fs_file_close(fs_file);
                 free(sect_alloc);
-                free(dinode_buf);
+                free(dino_buf);
                 return 1;
             }
             else if ((clustalloc == 0)
@@ -1093,35 +1166,39 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
             /* read the full cluster */
             cnt = tsk_fs_read_block
-                (fs, sect, dinode_buf, sect_proc << xtaffs->ssize_sh);
+                (fs, sect, dino_buf, sect_proc << xtaffs->ssize_sh);
             if (cnt != (sect_proc << xtaffs->ssize_sh)) {
                 if (cnt >= 0) {
                     tsk_error_reset();
-                    tsk_errno = TSK_ERR_FS_READ;
+                    tsk_error_set_errno(TSK_ERR_FS_READ);
                 }
-                snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                    "xtaffs_inode_walk: sector: %" PRIuDADDR, sect);
+                tsk_error_set_errstr2("xtaffs_inode_walk: sector: %"
+                    PRIuDADDR, sect);
                 tsk_fs_file_close(fs_file);
                 free(sect_alloc);
-                free(dinode_buf);
+                free(dino_buf);
                 return 1;
             }
         }
+
+        /* do an in-depth test if we are in an unallocted cluster
+         * or if we are not in a known directory. */
+        basicTest = 1;
+        if ((isset(sect_alloc, sect) == 0) || (clustalloc == 0))
+            basicTest = 0;
 
         // cycle through the sectors read
         for (sidx = 0; sidx < sect_proc; sidx++) {
             TSK_INUM_T inum;
             uint8_t isInDir;
 
-            dep =
-                (xtaffs_dentry *) & dinode_buf[sidx << xtaffs->ssize_sh];
+            dep = (xtaffs_dentry *) & dino_buf[sidx << xtaffs->ssize_sh];
 
             /* if we know it is not part of a directory and it is not valid dentires,
              * then skip it */
             isInDir = isset(sect_alloc, sect);
               
-            if ((isInDir == 0) &&
-                (xtaffs_isdentry(xtaffs, dep, 0) == 0)) {
+            if ((isInDir == 0) && (xtaffs_isdentry(xtaffs, dep, 0) == 0)) {
                 sect++;
                 continue;
             }
@@ -1141,6 +1218,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                     " starting at inode %" PRIuINUM "\n", sect, inum);
 
             /* cycle through the directory entries */
+
             for (didx = 0; didx < xtaffs->dentry_cnt_se;
                 didx++, inum++, dep++) {
                 int retval;
@@ -1167,7 +1245,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 }
 
 
-                /* Allocation status 
+                /* Allocation status
                  * This is determined first by the sector allocation status
                  * an then the dentry flag.  When a directory is deleted, the
                  * contents are not always set to unallocated
@@ -1194,16 +1272,16 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                     continue;
 
                 /* If we want only orphans, then check if this
-                 * inode is in the seen list 
+                 * inode is in the seen list
                  */
                 if ((myflags & TSK_FS_META_FLAG_UNALLOC) &&
                     (a_flags & TSK_FS_META_FLAG_ORPHAN) &&
-                    (tsk_list_find(fs->list_inum_named, inum))) {
+                    (tsk_fs_dir_find_inum_named(fs, inum))) {
                     continue;
                 }
 
                 /* Do a final sanity check */
-                if (0 == xtaffs_isdentry(xtaffs, dep, isInDir)){
+                if (0 == xtaffs_isdentry(xtaffs, dep, basicTest)){
                     continue;
                 }
 
@@ -1220,7 +1298,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                     else {
                         tsk_fs_file_close(fs_file);
                         free(sect_alloc);
-                        free(dinode_buf);
+                        free(dino_buf);
                         return 1;
                     }
                 }
@@ -1235,13 +1313,13 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
                 if (retval == TSK_WALK_STOP) {
                     tsk_fs_file_close(fs_file);
                     free(sect_alloc);
-                    free(dinode_buf);
+                    free(dino_buf);
                     return 0;
                 }
                 else if (retval == TSK_WALK_ERROR) {
                     tsk_fs_file_close(fs_file);
                     free(sect_alloc);
-                    free(dinode_buf);
+                    free(dino_buf);
                     return 1;
                 }
             }                   /* dentries */
@@ -1255,8 +1333,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 
 
     free(sect_alloc);
-    free(dinode_buf);
-    dinode_buf = NULL;
+    free(dino_buf);
 
 
     // handle the virtual orphans folder and FAT files if they asked for them
@@ -1297,6 +1374,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 }                               /* end of inode_walk */
 
 
+
 /*
  * return the contents of a specific inode
  *
@@ -1308,32 +1386,29 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
     TSK_INUM_T inum)
 {
     XTAFFS_INFO *xtaffs = (XTAFFS_INFO *) fs;
-    ssize_t cnt;
     TSK_DADDR_T sect;
-    size_t off;
     TSK_RETVAL_ENUM retval;
+    xtaffs_dentry dep;
 
     // clean up any error messages that are lying around
     tsk_error_reset();
 
-    /* 
+    /*
      * Sanity check.
      */
     if (inum < fs->first_inum || inum > fs->last_inum) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_INODE_NUM;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_inode_lookup: %" PRIuINUM " too large/small", inum);
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("xtaffs_inode_lookup: %" PRIuINUM
+            " too large/small", inum);
         return 1;
     }
 
     if (a_fs_file == NULL) {
-        tsk_errno = TSK_ERR_FS_ARG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_inode_lookup: fs_file is NULL");
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("xtaffs_inode_lookup: fs_file is NULL");
         return 1;
     }
-
     if (a_fs_file->meta == NULL) {
         if ((a_fs_file->meta =
                 tsk_fs_meta_alloc(XTAFFS_FILE_CONTENT_LEN)) == NULL)
@@ -1345,14 +1420,12 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
 
     /* As there is no real root inode in FAT, use the made up one */
     if (inum == XTAFFS_ROOTINO) {
-        xtaffs->dep = NULL;
         if (xtaffs_make_root(xtaffs, a_fs_file->meta))
             return 1;
         else
             return 0;
     }
     else if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
-        xtaffs->dep = NULL;
         if (tsk_fs_dir_make_orphan_dir_meta(fs, a_fs_file->meta))
             return 1;
         else
@@ -1361,39 +1434,36 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
 
     /* Get the sector that this inode would be in and its offset */
     sect = XTAFFS_INODE_2_SECT(xtaffs, inum);
-    off = XTAFFS_INODE_2_OFF(xtaffs, inum);
 
     if (sect > fs->last_block) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_INODE_NUM;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_inode_lookup: Inode %" PRIuINUM
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("xtaffs_inode_lookup: Inode %" PRIuINUM
             " in sector too big for image: %" PRIuDADDR, inum, sect);
         return 1;
     }
 
 
-    if (tsk_verbose)
-        tsk_fprintf(stderr,
-            "xtaffs_inode_lookup: reading sector %" PRIuDADDR
-            " for inode %" PRIuINUM "\n", sect, inum);
+    //if (tsk_verbose)
+    //    tsk_fprintf(stderr,
+    //        "xtaffs_inode_lookup: reading sector %" PRIuDADDR
+    //        " for inode %" PRIuINUM "\n", sect, inum);
 
-    cnt = tsk_fs_read_block(fs, sect, xtaffs->dinodes, xtaffs->ssize);
-    if (cnt != xtaffs->ssize) {
-        if (cnt >= 0) {
-            tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_READ;
-        }
-        snprintf(tsk_errstr2, TSK_ERRSTR_L,
-            "xtaffs_inode_lookup: block: %" PRIuDADDR, sect);
+    if (fatfs_dinode_load(fs, &dep, inum)) {
         return 1;
     }
-    xtaffs->dep = (xtaffs_dentry *) & xtaffs->dinodes[off];
-    if (xtaffs_isdentry(xtaffs, xtaffs->dep, 1)) {
+
+
+    //dep = (xtaffs_dentry *) & xtaffs->dinodes[off];
+    /* We use only the sector allocation status for the basic/adv test.
+     * Other places use information about if the sector is part of a folder
+     * or not, but we don't have that...  so we could let some corrupt things
+     * pass in here that get caught else where. */
+    if (xtaffs_isdentry(xtaffs, &dep, fatfs_is_sectalloc(fatfs, sect))) {
         if ((retval =
-                xtaffs_dinode_copy(xtaffs, a_fs_file->meta, xtaffs->dep, sect,
+                xtaffs_dinode_copy(xtaffs, a_fs_file->meta, &dep, sect,
                     inum)) != TSK_OK) {
-            /* If there was a unicode conversion error, 
+            /* If there was a unicode conversion error,
              * then still return the inode */
             if (retval == TSK_ERR) {
                 return 1;
@@ -1406,18 +1476,18 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
         }
         return 0;
     }
+
     else {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_INODE_NUM;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_inode_lookup: %" PRIuINUM " is not an inode", inum);
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("xtaffs_inode_lookup: %" PRIuINUM
+            " is not an inode", inum);
         return 1;
     }
 }
 
-
 /** \internal
- * Process the file and load up the clusters into the FS_DATA attribute 
+ * Process the file and load up the clusters into the FS_DATA attribute
  * in fs_meta. The run will list the starting sector and length in sectors
  *
  * @param a_fs_file File to process and structore to store results in
@@ -1436,9 +1506,9 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
 
     if ((a_fs_file == NULL) || (a_fs_file->meta == NULL)
         || (a_fs_file->fs_info == NULL)) {
-        tsk_errno = TSK_ERR_FS_ARG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_make_data_run: called with NULL pointers");
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr
+            ("xtaffs_make_data_run: called with NULL pointers");
         return 1;
     }
     fs_meta = a_fs_file->meta;
@@ -1471,17 +1541,17 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
         fs_meta->attr_state = TSK_FS_META_ATTR_ERROR;
         tsk_error_reset();
         if (a_fs_file->meta->flags & TSK_FS_META_FLAG_UNALLOC)
-            tsk_errno = TSK_ERR_FS_RECOVER;
+            tsk_error_set_errno(TSK_ERR_FS_RECOVER);
         else
-            tsk_errno = TSK_ERR_FS_INODE_COR;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_make_data_run: Starting cluster address too large: %"
+            tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+        tsk_error_set_errstr
+            ("xtaffs_make_data_run: Starting cluster address too large: %"
             PRIuDADDR, clust);
         return 1;
     }
 
 
-    /* We need to handle the special files specially because they 
+    /* We need to handle the special files specially because they
      * are not in the FAT.  Except for FAT32 root dirs, those are normal.
      */
     if ((a_fs_file->meta->addr == XTAFFS_ROOTINO)
@@ -1557,7 +1627,7 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
     }
 
 
-    /* A deleted file that we want to recover 
+    /* A deleted file that we want to recover
      * In this case, we could get a lot of errors because of inconsistent
      * data.  TO make it clear that these are from a recovery, we set most
      * error codes to _RECOVER so that they can be more easily suppressed.
@@ -1590,9 +1660,9 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
 
         if (sbase > fs->last_block) {
             tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_RECOVER;
-            snprintf(tsk_errstr, TSK_ERRSTR_L,
-                "xtaffs_make_data_run: Starting cluster address too large (recovery): %"
+            tsk_error_set_errno(TSK_ERR_FS_RECOVER);
+            tsk_error_set_errstr
+                ("xtaffs_make_data_run: Starting cluster address too large (recovery): %"
                 PRIuDADDR, sbase);
             fs_meta->attr_state = TSK_FS_META_ATTR_ERROR;
             return 1;
@@ -1609,7 +1679,7 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
 
 
         /* Part 1 is to make sure there are enough unallocated clusters
-         * for the size of the file 
+         * for the size of the file
          */
         clust = startclust;
         size_remain = recoversize;
@@ -1619,10 +1689,10 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
             int retval;
             sbase = XTAFFS_CLUST_2_SECT(xtaffs, clust);
 
-            /* Are we past the end of the FS? 
+            /* Are we past the end of the FS?
              * that means we could not find enough unallocated clusters
              * for the file size */
-            if (sbase > fs->last_block) {
+            if (sbase + xtaffs->csize - 1 > fs->last_block) {
                 canRecover = 0;
 
                 if (tsk_verbose)
@@ -1743,14 +1813,14 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
             /* Convert the cluster addr to a sector addr */
             sbase = XTAFFS_CLUST_2_SECT(xtaffs, clust);
 
-            if (sbase > fs->last_block) {
+            if (sbase + xtaffs->csize - 1 > fs->last_block) {
                 fs_meta->attr_state = TSK_FS_META_ATTR_ERROR;
                 tsk_error_reset();
 
-                tsk_errno = TSK_ERR_FS_INODE_COR;
-                snprintf(tsk_errstr, TSK_ERRSTR_L,
-                    "xtaffs_make_data_run: Invalid sector address in FAT (too large): %"
-                    PRIuDADDR, sbase);
+                tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
+                tsk_error_set_errstr
+                    ("xtaffs_make_data_run: Invalid sector address in FAT (too large): %"
+                    PRIuDADDR " (plus %d sectors)", sbase, fatfs->csize);
                 return 1;
             }
 
@@ -1787,9 +1857,8 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
             if ((int64_t) size_remain > 0) {
                 TSK_DADDR_T nxt;
                 if (xtaffs_getFAT(xtaffs, clust, &nxt)) {
-                    snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                        "file walk: Inode: %" PRIuINUM "  cluster: %"
-                        PRIuDADDR, fs_meta->addr, clust);
+                    tsk_error_set_errstr2("file walk: Inode: %" PRIuINUM
+                        "  cluster: %" PRIuDADDR, fs_meta->addr, clust);
                     fs_meta->attr_state = TSK_FS_META_ATTR_ERROR;
                     tsk_fs_attr_run_free(data_run_head);
                     tsk_list_free(list_seen);
