@@ -777,13 +777,13 @@ extern "C" {
     /**
     * \ingroup fslib
     * Macro that takes a file system type and returns 1 if the type
-         * is for a XTAF file system. */
+    * is for a XTAF file system. */
 #define TSK_FS_TYPE_ISXTAF(ftype) \
-        (((ftype) & TSK_FS_TYPE_XTAF)?1:0)
+    (((ftype) & TSK_FS_TYPE_XTAF)?1:0)
 
-        /**
-        * \ingroup fslib
-         * Macro that takes a file system type and returns 1 if the type
+    /**
+    * \ingroup fslib
+    * Macro that takes a file system type and returns 1 if the type
     * is for a FFS file system. */
 #define TSK_FS_TYPE_ISFFS(ftype) \
     (((ftype) & TSK_FS_TYPE_FFS_DETECT)?1:0)
