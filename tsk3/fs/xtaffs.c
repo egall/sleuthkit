@@ -57,6 +57,8 @@
 /* TTL is 0 if the entry has not been used.  TTL of 1 means it was the
  * most recently used, and TTL of FAT_CACHE_N means it was the least 
  * recently used.  This function has a LRU replacement algo
+ *
+ * Note: This routine assumes &xtaffs->cache_lock is locked by the caller.
  */
 // return -1 on error, or cache index on success (0 to FAT_CACHE_N)
 
@@ -108,10 +110,9 @@ static int getFATCacheIdx(XTAFFS_INFO * xtaffs, TSK_DADDR_T sect){
     if (cnt != FAT_CACHE_B) {
         if (cnt >= 0) {
             tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_READ;
+            tsk_error_set_errno(TSK_ERR_FS_READ);
         }
-        snprintf(tsk_errstr2, TSK_ERRSTR_L,
-            "getFATCacheIdx: FAT: %" PRIuDADDR, sect);
+        tsk_error_set_errstr2("getFATCacheIdx: FAT: %" PRIuDADDR, sect);
         return -1;
     }
 
@@ -129,6 +130,7 @@ static int getFATCacheIdx(XTAFFS_INFO * xtaffs, TSK_DADDR_T sect){
 
     xtaffs->fatc_ttl[cidx] = 1;
     xtaffs->fatc_addr[cidx] = sect;
+
     return cidx;
 }
 
@@ -168,9 +170,9 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
         }
 
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_ARG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_getFAT: invalid cluster address: %" PRIuDADDR, clust);
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("xtaffs_getFAT: invalid cluster address: %"
+            PRIuDADDR, clust);
         return 1;
     }
 
@@ -178,9 +180,9 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
     case TSK_FS_TYPE_FAT12:
         if (clust & 0xf000) {
             tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_ARG;
-            snprintf(tsk_errstr, TSK_ERRSTR_L,
-                "xtaffs_getFAT: TSK_FS_TYPE_FAT12 Cluster %" PRIuDADDR
+            tsk_error_set_errno(TSK_ERR_FS_ARG);
+            tsk_error_set_errstr
+                ("xtaffs_getFAT: TSK_FS_TYPE_FAT12 Cluster %" PRIuDADDR
                 " too large", clust);
             return 1;
         }
@@ -189,10 +191,14 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
         sect = xtaffs->firstfatsect +
             ((clust + (clust >> 1)) >> xtaffs->ssize_sh);
 
+        tsk_take_lock(&xtaffs->cache_lock);
+
         /* Load the FAT if we don't have it */
         // see if it is in the cache
-        if (-1 == (cidx = getFATCacheIdx(xtaffs, sect)))
+        if (-1 == (cidx = getFATCacheIdx(xtaffs, sect))) {
+            tsk_release_lock(&xtaffs->cache_lock);
             return 1;
+        }
 
         /* get the offset into the cache */
         offs = ((sect - xtaffs->fatc_addr[cidx]) << xtaffs->ssize_sh) +
@@ -209,12 +215,13 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
                 tsk_fs_read(fs, sect * fs->block_size,
                 xtaffs->fatc_buf[cidx], FAT_CACHE_B);
             if (cnt != FAT_CACHE_B) {
+                tsk_release_lock(&xtaffs->cache_lock);
                 if (cnt >= 0) {
                     tsk_error_reset();
-                    tsk_errno = TSK_ERR_FS_READ;
+                    tsk_error_set_errno(TSK_ERR_FS_READ);
                 }
-                snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                    "xtaffs_getFAT: TSK_FS_TYPE_FAT12 FAT overlap: %"
+                tsk_error_set_errstr2
+                    ("xtaffs_getFAT: TSK_FS_TYPE_FAT12 FAT overlap: %"
                     PRIuDADDR, sect);
                 return 1;
             }
@@ -227,6 +234,8 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
         a_ptr = (uint8_t *) xtaffs->fatc_buf[cidx] + offs;
 
         tmp16 = tsk_getu16(fs->endian, a_ptr);
+
+        tsk_release_lock(&xtaffs->cache_lock);
 
         /* slide it over if it is one of the odd clusters */
         if (clust & 1)
@@ -249,8 +258,14 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
     case TSK_FS_TYPE_FAT16:
         /* Get sector in FAT for cluster and load it if needed */
         sect = xtaffs->firstfatsect + ((clust << 1) >> xtaffs->ssize_sh);
-        if (-1 == (cidx = getFATCacheIdx(xtaffs, sect)))
+
+        tsk_take_lock(&xtaffs->cache_lock);
+
+        if (-1 == (cidx = getFATCacheIdx(xtaffs, sect))) {
+            tsk_release_lock(&xtaffs->cache_lock);
             return 1;
+        }
+
 
         /* get pointer to entry in the cache buffer */
         a_ptr = (uint8_t *) xtaffs->fatc_buf[cidx] +
@@ -258,6 +273,8 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
             ((clust << 1) % xtaffs->ssize);
 
         *value = tsk_getu16(fs->endian, a_ptr) & FATFS_16_MASK;
+
+        tsk_release_lock(&xtaffs->cache_lock);
 
         /* sanity check */
         if ((*value > (xtaffs->lastclust)) &&
@@ -273,8 +290,14 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
     case TSK_FS_TYPE_FAT32:
         /* Get sector in FAT for cluster and load if needed */
         sect = xtaffs->firstfatsect + ((clust << 2) >> xtaffs->ssize_sh);
-        if (-1 == (cidx = getFATCacheIdx(xtaffs, sect)))
+
+        tsk_take_lock(&xtaffs->cache_lock);
+
+        if (-1 == (cidx = getFATCacheIdx(xtaffs, sect))) {
+            tsk_release_lock(&xtaffs->cache_lock);
             return 1;
+        }
+
 
         /* get pointer to entry in current buffer */
         a_ptr = (uint8_t *) xtaffs->fatc_buf[cidx] +
@@ -282,6 +305,8 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
             (clust << 2) % xtaffs->ssize;
 
         *value = tsk_getu32(fs->endian, a_ptr) & FATFS_32_MASK;
+
+        tsk_release_lock(&xtaffs->cache_lock);
 
         /* sanity check */
         if ((*value > xtaffs->lastclust) &&
@@ -297,9 +322,9 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
 
     default:
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_ARG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "xtaffs_getFAT: Unknown FAT type: %d", xtaffs->fs_info.ftype);
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("xtaffs_getFAT: Unknown FAT type: %d",
+            xtaffs->fs_info.ftype);
         return 1;
     }
 }
@@ -416,16 +441,16 @@ xtaffs_block_walk(TSK_FS_INFO * fs, TSK_DADDR_T a_start_blk,
      */
     if (a_start_blk < fs->first_block || a_start_blk > fs->last_block) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "%s: Start block: %" PRIuDADDR "", myname, a_start_blk);
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr("%s: Start block: %" PRIuDADDR "", myname,
+            a_start_blk);
         return 1;
     }
     if (a_end_blk < fs->first_block || a_end_blk > fs->last_block) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "%s: End block: %" PRIuDADDR "", myname, a_end_blk);
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr("%s: End block: %" PRIuDADDR "", myname,
+            a_end_blk);
         return 1;
     }
 
@@ -473,19 +498,21 @@ xtaffs_block_walk(TSK_FS_INFO * fs, TSK_DADDR_T a_start_blk,
         /* Read 8 sectors at a time to be faster */
         for (; addr < xtaffs->firstclustsect && addr <= a_end_blk;) {
 
-            cnt =
-                tsk_fs_read_block(fs, addr, data_buf, fs->block_size * 8);
-            if (cnt != fs->block_size * 8) {
-                if (cnt >= 0) {
-                    tsk_error_reset();
-                    tsk_errno = TSK_ERR_FS_READ;
+            if ((a_flags & TSK_FS_BLOCK_WALK_FLAG_AONLY) == 0) {
+                cnt =
+                    tsk_fs_read_block(fs, addr, data_buf, fs->block_size * 8);
+                if (cnt != fs->block_size * 8) {
+                    if (cnt >= 0) {
+                        tsk_error_reset();
+                        tsk_error_set_errno(TSK_ERR_FS_READ);
+                    }
+                    tsk_error_set_errstr2
+                        ("xtaffs_block_walk: pre-data area block: %" PRIuDADDR,
+                        addr);
+                    free(data_buf);
+                    tsk_fs_block_free(fs_block);
+                    return 1;
                 }
-                snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                    "xtaffs_block_walk: pre-data area block: %"
-                    PRIuDADDR, addr);
-                free(data_buf);
-                tsk_fs_block_free(fs_block);
-                return 1;
             }
 
             /* Process the sectors until we get to the clusters, 
@@ -513,6 +540,8 @@ xtaffs_block_walk(TSK_FS_INFO * fs, TSK_DADDR_T a_start_blk,
                     && (!(a_flags & TSK_FS_BLOCK_WALK_FLAG_CONT)))
                     continue;
 
+                if (a_flags & TSK_FS_BLOCK_WALK_FLAG_AONLY)
+                    myflags |= TSK_FS_BLOCK_FLAG_AONLY;
 
                 tsk_fs_block_set(fs, fs_block, addr,
                     myflags | TSK_FS_BLOCK_FLAG_RAW,
@@ -597,6 +626,9 @@ xtaffs_block_walk(TSK_FS_INFO * fs, TSK_DADDR_T a_start_blk,
             && (!(a_flags & TSK_FS_BLOCK_WALK_FLAG_UNALLOC)))
             continue;
 
+        if (a_flags & TSK_FS_BLOCK_WALK_FLAG_AONLY)
+            myflags |= TSK_FS_BLOCK_FLAG_AONLY;
+
 
         /* The final cluster may not be full */
         if (a_end_blk - addr + 1 < xtaffs->csize)
@@ -604,18 +636,20 @@ xtaffs_block_walk(TSK_FS_INFO * fs, TSK_DADDR_T a_start_blk,
         else
             read_size = xtaffs->csize;
 
-        cnt = tsk_fs_read_block
-            (fs, addr, data_buf, fs->block_size * read_size);
-        if (cnt != fs->block_size * read_size) {
-            if (cnt >= 0) {
-                tsk_error_reset();
-                tsk_errno = TSK_ERR_FS_READ;
+        if ((a_flags & TSK_FS_BLOCK_WALK_FLAG_AONLY) == 0) {
+            cnt = tsk_fs_read_block
+                (fs, addr, data_buf, fs->block_size * read_size);
+            if (cnt != fs->block_size * read_size) {
+                if (cnt >= 0) {
+                    tsk_error_reset();
+                    tsk_error_set_errno(TSK_ERR_FS_READ);
+                }
+                tsk_error_set_errstr2("xtaffs_block_walk: block: %" PRIuDADDR,
+                    addr);
+                free(data_buf);
+                tsk_fs_block_free(fs_block);
+                return 1;
             }
-            snprintf(tsk_errstr2, TSK_ERRSTR_L,
-                "xtaffs_block_walk: block: %" PRIuDADDR, addr);
-            free(data_buf);
-            tsk_fs_block_free(fs_block);
-            return 1;
         }
 
         /* go through each sector in the cluster */
@@ -659,9 +693,8 @@ static uint8_t
 xtaffs_fscheck(TSK_FS_INFO * fs, FILE * hFile)
 {
     tsk_error_reset();
-    tsk_errno = TSK_ERR_FS_UNSUPFUNC;
-    snprintf(tsk_errstr, TSK_ERRSTR_L,
-        "fscheck not implemented for FAT yet");
+    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
+    tsk_error_set_errstr("fscheck not implemented for XTAF yet");
     return 1;
 
     /* Check that allocated dentries point to start of allcated cluster chain */
@@ -722,10 +755,10 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     if (cnt != fs->block_size) {
         if (cnt >= 0) {
             tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_READ;
+            tsk_error_set_errno(TSK_ERR_FS_READ);
         }
-        snprintf(tsk_errstr2, TSK_ERRSTR_L,
-            "xtaffs_fsstat: root directory: %" PRIuDADDR, xtaffs->rootsect);
+        tsk_error_set_errstr2("xtaffs_fsstat: root directory: %" PRIuDADDR,
+            xtaffs->rootsect);
         free(data_buf);
         return 1;
     }
@@ -1031,11 +1064,13 @@ xtaffs_istat(TSK_FS_INFO * fs, FILE * hFile, TSK_INUM_T inum,
     TSK_FS_META *fs_meta;
     TSK_FS_FILE *fs_file;
     TSK_FS_META_NAME_LIST *fs_name_list;
-    XTAFFS_INFO *xtaffs = (XTAFFS_INFO *) fs;
     XTAFFS_PRINT_ADDR print;
+    xtaffs_dentry dep;
+    char timeBuf[128];
 
     // clean up any error messages that are lying around
     tsk_error_reset();
+
 
     if ((fs_file = tsk_fs_file_open_meta(fs, NULL, inum)) == NULL) {
         return 1;
@@ -1050,7 +1085,7 @@ xtaffs_istat(TSK_FS_INFO * fs, FILE * hFile, TSK_INUM_T inum,
     tsk_fprintf(hFile, "File Attributes: ");
 
     /* This should only be null if we have the root directory or special file */
-    if (xtaffs->dep == NULL) {
+    if (xtaffs_dinode_load(fs, &dep, inum)) {
         if (inum == XTAFFS_ROOTINO)
             tsk_fprintf(hFile, "Directory\n");
         else if (fs_file->meta->type == TSK_FS_META_TYPE_VIRT)
@@ -1058,24 +1093,25 @@ xtaffs_istat(TSK_FS_INFO * fs, FILE * hFile, TSK_INUM_T inum,
         else
             tsk_fprintf(hFile, "File\n");
     }
-    else if ((xtaffs->dep->attrib & XTAFFS_ATTR_LFN) == XTAFFS_ATTR_LFN) {
-        tsk_fprintf(hFile, "Long File Name\n");
+    else if ((dep.attrib & XTAFFS_ATTR_LFN) == XTAFFS_ATTR_LFN) {
+        tsk_fprintf(hFile, "Long File Name\n"); /*AJN TODO Scrap, XTAF doesn't have LFN's.*/
     }
     else {
-        if (xtaffs->dep->attrib & XTAFFS_ATTR_DIRECTORY)
+        if (dep.attrib & XTAFFS_ATTR_DIRECTORY)
             tsk_fprintf(hFile, "Directory");
-        else if (xtaffs->dep->attrib & XTAFFS_ATTR_VOLUME)
+        else if (dep.attrib & XTAFFS_ATTR_VOLUME)
             tsk_fprintf(hFile, "Volume Label");
         else
             tsk_fprintf(hFile, "File");
 
-        if (xtaffs->dep->attrib & XTAFFS_ATTR_READONLY)
+        /*AJN TODO Confirm these attributes*/
+        if (dep.attrib & XTAFFS_ATTR_READONLY)
             tsk_fprintf(hFile, ", Read Only");
-        if (xtaffs->dep->attrib & XTAFFS_ATTR_HIDDEN)
+        if (dep.attrib & XTAFFS_ATTR_HIDDEN)
             tsk_fprintf(hFile, ", Hidden");
-        if (xtaffs->dep->attrib & XTAFFS_ATTR_SYSTEM)
+        if (dep.attrib & XTAFFS_ATTR_SYSTEM)
             tsk_fprintf(hFile, ", System");
-        if (xtaffs->dep->attrib & XTAFFS_ATTR_ARCHIVE)
+        if (dep.attrib & XTAFFS_ATTR_ARCHIVE)
             tsk_fprintf(hFile, ", Archive");
 
         tsk_fprintf(hFile, "\n");
@@ -1090,26 +1126,36 @@ xtaffs_istat(TSK_FS_INFO * fs, FILE * hFile, TSK_INUM_T inum,
 
     if (sec_skew != 0) {
         tsk_fprintf(hFile, "\nAdjusted Directory Entry Times:\n");
-        fs_meta->mtime -= sec_skew;
-        fs_meta->atime -= sec_skew;
-        fs_meta->crtime -= sec_skew;
+
+        if (fs_meta->mtime)
+            fs_meta->mtime -= sec_skew;
+        if (fs_meta->atime)
+            fs_meta->atime -= sec_skew;
+        if (fs_meta->crtime)
+            fs_meta->crtime -= sec_skew;
 
         tsk_fprintf(hFile, "Written:\t%s", ctime(&fs_meta->mtime));
         tsk_fprintf(hFile, "Accessed:\t%s", ctime(&fs_meta->atime));
         tsk_fprintf(hFile, "Created:\t%s", ctime(&fs_meta->crtime));
 
-        fs_meta->mtime += sec_skew;
-        fs_meta->atime += sec_skew;
-        fs_meta->crtime += sec_skew;
+        if (fs_meta->mtime == 0)
+            fs_meta->mtime += sec_skew;
+        if (fs_meta->atime == 0)
+            fs_meta->atime += sec_skew;
+        if (fs_meta->crtime == 0)
+            fs_meta->crtime += sec_skew;
 
         tsk_fprintf(hFile, "\nOriginal Directory Entry Times:\n");
     }
     else
         tsk_fprintf(hFile, "\nDirectory Entry Times:\n");
 
-    tsk_fprintf(hFile, "Written:\t%s", ctime(&fs_meta->mtime));
-    tsk_fprintf(hFile, "Accessed:\t%s", ctime(&fs_meta->atime));
-    tsk_fprintf(hFile, "Created:\t%s", ctime(&fs_meta->crtime));
+    tsk_fprintf(hFile, "Written:\t%s\n", tsk_fs_time_to_str(fs_meta->mtime,
+            timeBuf));
+    tsk_fprintf(hFile, "Accessed:\t%s\n",
+        tsk_fs_time_to_str(fs_meta->atime, timeBuf));
+    tsk_fprintf(hFile, "Created:\t%s\n",
+        tsk_fs_time_to_str(fs_meta->crtime, timeBuf));
 
     tsk_fprintf(hFile, "\nSectors:\n");
 
@@ -1142,8 +1188,8 @@ uint8_t
 xtaffs_jopen(TSK_FS_INFO * fs, TSK_INUM_T inum)
 {
     tsk_error_reset();
-    tsk_errno = TSK_ERR_FS_UNSUPFUNC;
-    snprintf(tsk_errstr, TSK_ERRSTR_L, "FAT does not have a journal\n");
+    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
+    tsk_error_set_errstr("XTAF does not have a journal\n");
     return 1;
 }
 
@@ -1153,8 +1199,8 @@ xtaffs_jentry_walk(TSK_FS_INFO * fs, int a_flags,
     TSK_FS_JENTRY_WALK_CB a_action, void *a_ptr)
 {
     tsk_error_reset();
-    tsk_errno = TSK_ERR_FS_UNSUPFUNC;
-    snprintf(tsk_errstr, TSK_ERRSTR_L, "FAT does not have a journal\n");
+    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
+    tsk_error_set_errstr("XTAF does not have a journal\n");
     return 1;
 }
 
@@ -1165,8 +1211,8 @@ xtaffs_jblk_walk(TSK_FS_INFO * fs, TSK_DADDR_T start, TSK_DADDR_T end,
     int a_flags, TSK_FS_JBLK_WALK_CB a_action, void *a_ptr)
 {
     tsk_error_reset();
-    tsk_errno = TSK_ERR_FS_UNSUPFUNC;
-    snprintf(tsk_errstr, TSK_ERRSTR_L, "FAT does not have a journal\n");
+    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
+    tsk_error_set_errstr("XTAF does not have a journal\n");
     return 1;
 }
 
@@ -1181,19 +1227,16 @@ static void
 xtaffs_close(TSK_FS_INFO * fs)
 {
     XTAFFS_INFO *xtaffs = (XTAFFS_INFO *) fs;
+
+    xtaffs_dir_buf_free(xtaffs);
+
     fs->tag = 0;
 
-    free(xtaffs->dinodes);
-
-    if (xtaffs->dir_buf)
-        free(xtaffs->dir_buf);
-    if (xtaffs->par_buf)
-        free(xtaffs->par_buf);
-
-    tsk_list_free(fs->list_inum_named);
-    fs->list_inum_named = NULL;
     free(xtaffs->sb);
-    free(fs);
+    tsk_deinit_lock(&xtaffs->cache_lock);
+    tsk_deinit_lock(&xtaffs->dir_lock);
+	
+    tsk_fs_free(fs);
 }
 
 
@@ -1220,18 +1263,19 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     ssize_t cnt;
     uint32_t fsopen_numfat, fsopen_csize;
     int i;
+    uint8_t used_backup_boot = 0;       // set to 1 if we used the backup boot sector
 
     // clean up any error messages that are lying around
     tsk_error_reset();
 
     if (TSK_FS_TYPE_ISXTAF(ftype) == 0) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_ARG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L, "%s: Invalid FS Type", myname);
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("%s: Invalid FS Type", myname);
         return NULL;
     }
 
-    if ((xtaffs = (XTAFFS_INFO *) tsk_malloc(sizeof(*xtaffs))) == NULL)
+    if ((xtaffs = (XTAFFS_INFO *) tsk_fs_malloc(sizeof(*xtaffs))) == NULL)
         return NULL;
 
     fs = &(xtaffs->fs_info);
@@ -1268,9 +1312,9 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         if (cnt != len) {
             if (cnt >= 0) {
                 tsk_error_reset();
-                tsk_errno = TSK_ERR_FS_READ;
+                tsk_error_set_errno(TSK_ERR_FS_READ);
             }
-            snprintf(tsk_errstr2, TSK_ERRSTR_L, "%s: boot sector", myname);
+            tsk_error_set_errstr2("%s: boot sector", myname);
             fs->tag = 0;
             free(xtaffs->sb);
             free(xtaffs);
@@ -1288,16 +1332,24 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             }
             else {
                 fs->tag = 0;
-                free(fatsb);
+                free(fatsb); /*AJN TODO How often does 'fatsb' occur? It shouldn't anymore.*/
                 free(xtaffs);
                 tsk_error_reset();
-                tsk_errno = TSK_ERR_FS_MAGIC;
-                snprintf(tsk_errstr, TSK_ERRSTR_L,
-                    "Not a FATFS file system (magic)");
+                tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+                tsk_error_set_errstr("Not a XTAFFS file system (magic)");
+                if (tsk_verbose)
+                    fprintf(stderr, "xtaffs_open: Incorrect XTAFFS magic\n");
                 return NULL;
             }
         }
+        // found the magic
         else {
+            if (sb_off) {
+                used_backup_boot = 1;
+                if (tsk_verbose)
+                    fprintf(stderr,
+                        "xtaffs_open: Using backup boot sector\n");
+            }
             break;
         }
     }
@@ -1321,10 +1373,13 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
     else {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_MAGIC;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Error: sector size (%d) is not a multiple of device size (%d)\nDo you have a disk image instead of a partition image?",
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr
+            ("Error: sector size (%d) is not a multiple of device size (%d)\nDo you have a disk image instead of a partition image?",
             xtaffs->ssize, fs->dev_bsize);
+        if (tsk_verbose)
+            fprintf(stderr, "xtaffs_open: Invalid sector size (%d)\n",
+                xtaffs->ssize);
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
@@ -1342,13 +1397,15 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         (xtaffs->csize != 0x10) &&
         (xtaffs->csize != 0x20) &&
         (xtaffs->csize != 0x40) && (xtaffs->csize != 0x80)) {
+        if (tsk_verbose)
+            fprintf(stderr, "xtaffs_open: Invalid cluster size (%d)\n",
+                xtaffs->csize);
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_MAGIC;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Not a XTAFFS file system (cluster size)");
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr("Not a XTAFFS file system (cluster size)");
         return NULL;
     }
 
@@ -1357,13 +1414,15 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     if(fsopen_numfat > 256) printf("Number of FATs is more than 256!\n");
     xtaffs->numfat = (uint8_t) fsopen_numfat;
     if ((xtaffs->numfat == 0) || (xtaffs->numfat > 8)) {
+        if (tsk_verbose)
+            fprintf(stderr, "xtaffs_open: Invalid number of FATS (%d)\n",
+                xtaffs->numfat);
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_MAGIC;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Not a XTAFFS file system (number of FATs)");
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr("Not a XTAFFS file system (number of FATs)");
         return NULL;
     }
 
@@ -1387,9 +1446,10 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     */
 
 
+    /*AJN TODO BUG: img_info->size is an incorect proxy for the partition size.*/
     if(img_info->size == 146413464 || img_info->size == 4712496640 || img_info->size == 4846714880){
-//        printf("Partition 1\n");
-        xtaffs->rootsect = 1176;
+//        printf("Partition 1\n"); //AJN TODO These should be debug prints
+        xtaffs->rootsect = 1176; //AJN TODO Can we calculate these instead?
         xtaffs->sectperfat = (uint32_t) 1160;
         xtaffs->firstclustsect = 1240;
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
@@ -1435,7 +1495,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->lastclust = (TSK_DADDR_T) 16381;
     }else if(img_info->size == 244943674880 || offset == 0x130eb0000){
 //        printf("Data Partition\n");
-        xtaffs->rootsect = 116808;
+        xtaffs->rootsect = 116808; /*AJN TODO This will probably fail on a non-250GB disk*/
         xtaffs->sectperfat = (uint32_t) 116800;
         xtaffs->firstclustsect = (TSK_DADDR_T) 116840;
         xtaffs->firstdatasect = xtaffs->firstclustsect;
@@ -1446,8 +1506,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Partition was not valid\n");
+        tsk_error_set_errno(TSK_ERR_FS_UNKTYPE); /*AJN TODO Is this the right error to supply?*/
+        tsk_error_set_errstr("Partition was not valid\n");
         return NULL;
     }
 
@@ -1455,21 +1515,29 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
 
     if (xtaffs->sectperfat == 0) {
+        if (tsk_verbose)
+            fprintf(stderr,
+                "xtaffs_open: Invalid number of sectors per FAT (%d)\n",
+                xtaffs->sectperfat);
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_MAGIC;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Not a XTAFFS file system (invalid sectors per FAT)");
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr
+            ("Not a XTAFFS file system (invalid sectors per FAT)");
         return NULL;
     }
     if ((xtaffs->firstfatsect == 0) || (xtaffs->firstfatsect > sectors)) {
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_WALK_RNG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Not a XTAFFS file system (invalid first FAT sector %"
+        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+        tsk_error_set_errstr
+            ("Not a XTAFFS file system (invalid first FAT sector %"
             PRIuDADDR ")", xtaffs->firstfatsect);
+        if (tsk_verbose)
+            fprintf(stderr,
+                "xtaffs_open: Invalid first FAT (%" PRIuDADDR ")\n",
+                xtaffs->firstfatsect);
 
         fs->tag = 0;
         free(fatsb);
@@ -1536,22 +1604,27 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             free(fatsb);
             free(xtaffs);
             tsk_error_reset();
-            tsk_errno = TSK_ERR_FS_MAGIC;
-            snprintf(tsk_errstr, TSK_ERRSTR_L,
-                "Too many sectors for TSK_FS_TYPE_FAT12: try auto-detect mode");
+            tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+            tsk_error_set_errstr
+                ("Too many sectors for TSK_FS_TYPE_FAT12: try auto-detect mode");
+            if (tsk_verbose)
+                fprintf(stderr,
+                    "xtaffs_open: Too many sectors for FAT12\n");
             return NULL;
         }
     }
 /*
-
+AJN TODO Why did we comment this out? Is the numroot field missing?
     if ((ftype == TSK_FS_TYPE_FAT32) && (xtaffs->numroot != 0)) {
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_MAGIC;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Invalid TSK_FS_TYPE_FAT32 image (numroot != 0)");
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr
+            ("Invalid TSK_FS_TYPE_FAT32 image (numroot != 0)");
+        if (tsk_verbose)
+            fprintf(stderr, "xtaffs_open: numroom != 0 for XTAF32\n");
         return NULL;
     }
 
@@ -1560,13 +1633,93 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_MAGIC;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Invalid FAT image (numroot == 0, and not TSK_FS_TYPE_FAT32)");
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr
+            ("Invalid FAT image (numroot == 0, and not TSK_FS_TYPE_FAT32)");
+        if (tsk_verbose)
+            fprintf(stderr, "xtaffs_open: numroom == 0 and not XTAF32\n");
         return NULL;
     }
 */
+    /* additional sanity checks if we think we are using the backup boot sector.
+     * The scenario to prevent here is if fat_open is called 6 sectors before the real start
+     * of the file system, then we want to detect that it was not a backup that we saw.  
+     */
+    if (used_backup_boot) {
+        // only FAT32 has backup boot sectors..
+        if (ftype != TSK_FS_TYPE_FAT32) {
+            fs->tag = 0;
+            free(xtafsb);
+            free(xtaffs); /*AJN TODO Check for missed 'fatfs' symbols*/
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+            tsk_error_set_errstr
+                ("Invalid XTAF image (Used what we thought was a backup boot sector, but it is not TSK_FS_TYPE_FAT32)");
+            if (tsk_verbose)
+                fprintf(stderr,
+                    "xtaffs_open: Had to use backup boot sector, but this isn't XTAF32\n");
+            return NULL;
+        }
+        if (xtaffs->numroot > 1) {
+            uint8_t buf1[512];
+            uint8_t buf2[512];
+            int i2;
+            int numDiffs;
 
+            cnt =
+                tsk_fs_read(fs, xtaffs->firstfatsect * xtaffs->ssize,
+                (char *) buf1, 512);
+            if (cnt != 512) {
+                if (cnt >= 0) {
+                    tsk_error_reset();
+                    tsk_error_set_errno(TSK_ERR_FS_READ);
+                }
+                tsk_error_set_errstr2("%s: FAT1", myname);
+                fs->tag = 0;
+                free(xtaffs->sb);
+                free(xtaffs);
+                return NULL;
+            }
+
+            cnt =
+                tsk_fs_read(fs,
+                (xtaffs->firstfatsect + xtaffs->sectperfat) * xtaffs->ssize,
+                (char *) buf2, 512);
+            if (cnt != 512) {
+                if (cnt >= 0) {
+                    tsk_error_reset();
+                    tsk_error_set_errno(TSK_ERR_FS_READ);
+                }
+                tsk_error_set_errstr2("%s: FAT2", myname);
+                fs->tag = 0;
+                free(xtaffs->sb);
+                free(xtaffs);
+                return NULL;
+            }
+
+            numDiffs = 0;
+            for (i2 = 0; i2 < 512; i2++) {
+                if (buf1[i2] != buf2[i2]) {
+                    numDiffs++;
+                }
+            }
+            if (numDiffs > 25) {
+                fs->tag = 0;
+                free(xtafsb);
+                free(xtaffs);
+                tsk_error_reset();
+                tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+                tsk_error_set_errstr
+                    ("Invalid FAT image (Too many differences between FATS from guessing (%d diffs))",
+                    numDiffs);
+                if (tsk_verbose)
+                    fprintf(stderr,
+                        "xtaffs_open: Too many differences in FAT from guessing (%d diffs)\n",
+                        numDiffs);
+                return NULL;
+            }
+        }
+    }
 
 
     /* Set the mask to use on the cluster values */
@@ -1584,9 +1737,9 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
-        tsk_errno = TSK_ERR_FS_ARG;
-        snprintf(tsk_errstr, TSK_ERRSTR_L,
-            "Unknown FAT type in xtaffs_open: %d\n", ftype);
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("Unknown FAT type in xtaffs_open: %d\n",
+            ftype);
         return NULL;
     }
     fs->duname = "Sector";
@@ -1595,16 +1748,6 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->fatc_addr[i] = 0;
         xtaffs->fatc_ttl[i] = 0;
     }
-
-    /* allocate a cluster-sized buffer for inodes */
-    if ((xtaffs->dinodes = (char *)
-            tsk_malloc(xtaffs->csize << xtaffs->ssize_sh)) == NULL) {
-        fs->tag = 0;
-        free(fatsb);
-        free(xtaffs);
-        return NULL;
-    }
-
 
     /*
      * block calculations : although there are no blocks in fat, we will
@@ -1678,7 +1821,9 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
 
     // initialize the caches
-    fs->list_inum_named = NULL;
+    tsk_init_lock(&xtaffs->cache_lock);
+    tsk_init_lock(&xtaffs->dir_lock);
+    xtaffs->inum2par = NULL;
 
     return fs;
 }
