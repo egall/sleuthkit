@@ -71,7 +71,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 
     /* inititialize settings */
     vs->part_list = NULL;
-    vs->endian = 0x2;
+    vs->endian = TSK_BIG_ENDIAN;
     vs->block_size = 512;
 
     /* Assign functions */
