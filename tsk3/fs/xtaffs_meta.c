@@ -26,117 +26,6 @@
 #include "tsk_xtaffs.h"
 
 /*
- * Identify if the dentry is a valid 8.3 name
- *
- * returns 1 if it is, 0 if it does not
- */
-static uint8_t
-is_83_name(xtaffs_dentry * de)
-{
-    if (!de)
-        return 0;
-
-    /* The IS_NAME macro will fail if the value is 0x05, which is only
-     * valid in name[0], similarly with '.' */
-    if ((de->name[0] != XTAFFS_SLOT_E5) && (de->name[0] != '.') &&
-        (XTAFFS_IS_83_NAME(de->name[0]) == 0)) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[0] is invalid\n");
-        return 0;
-    }
-
-    // the name cannot start with 0x20
-    else if (de->name[0] == 0x20) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[0] has 0x20\n");
-        return 0;
-    }
-
-    /* the second name field can only be . if the first one is a . */
-    if (de->name[1] == '.') {
-        if (de->name[0] != '.') {
-            if (tsk_verbose)
-                fprintf(stderr, "xtaffs_is_83_name: name[1] is .\n");
-            return 0;
-        }
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[1]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[1] is invalid\n");
-        return 0;
-    }
-
-    if (XTAFFS_IS_83_NAME(de->name[2]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[2] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[3]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[3] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[4]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[4] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[5]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[5] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[6]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[6] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[7]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[7] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[8]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[8] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[9]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[9] is invalid\n");
-        return 0;
-    }
-    else if (XTAFFS_IS_83_NAME(de->name[10]) == 0) {
-        if (tsk_verbose)
-            fprintf(stderr, "xtaffs_is_83_name: name[10] is invalid\n");
-        return 0;
-    }
-
-    /* Ensure that if we get a "space", that the rest of the
-     * name is spaces.  This is not in the spec, but is how
-     * windows operates and serves as a good check to remove 
-     * false positives.  We do not do this check for the
-     * volume label though. */
-    if ((de->attrib & XTAFFS_ATTR_VOLUME) != XTAFFS_ATTR_VOLUME) {
-        if (((de->name[1] == 0x20) && (de->name[2] != 0x20)) ||
-            ((de->name[2] == 0x20) && (de->name[3] != 0x20)) ||
-            ((de->name[3] == 0x20) && (de->name[4] != 0x20)) ||
-            ((de->name[4] == 0x20) && (de->name[5] != 0x20)) ||
-            ((de->name[5] == 0x20) && (de->name[6] != 0x20)) ||
-            ((de->name[6] == 0x20) && (de->name[7] != 0x20)) ||
-            ((de->name[8] == 0x20) && (de->name[9] != 0x20))) {
-            if (tsk_verbose)
-                fprintf(stderr,
-                    "xtaffs_is_83_name: space before non-space\n");
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-
-/*
 ** Convert the DOS time to the UNIX version
 **
 ** UNIX stores the time in seconds from 1970 in UTC
@@ -745,12 +634,6 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
                     "xtaffs_isdentry: non-zero size and NULL starting cluster\n");
             return 0;
         }
-
-/*
-        else if (is_83_name(de) == 0){
-            return 0;
-        }
-*/
 
         // basic sanity check on values
         else if ((tsk_getu16(fs->endian, de->ctime) == 0)
