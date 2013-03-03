@@ -1649,7 +1649,6 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
         // only FAT32 has backup boot sectors..
         if (ftype != TSK_FS_TYPE_FAT32) {
             fs->tag = 0;
-            free(xtafsb);
             free(xtaffs); /*AJN TODO Check for missed 'fatfs' symbols*/
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_MAGIC);
@@ -1705,7 +1704,6 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
             }
             if (numDiffs > 25) {
                 fs->tag = 0;
-                free(xtafsb);
                 free(xtaffs);
                 tsk_error_reset();
                 tsk_error_set_errno(TSK_ERR_FS_MAGIC);

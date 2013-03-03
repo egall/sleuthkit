@@ -696,7 +696,7 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
                 ((XTAFFS_ISDATE(tsk_getu16(fs->endian, de->cdate)) == 0) ||
                     (dos2unixtime(tsk_getu16(fs->endian, de->cdate),
                             tsk_getu16(fs->endian, de->ctime),
-                            de->ctimeten) == 0))) {
+                            0) == 0))) {
                 if (tsk_verbose)
                     fprintf(stderr, "xtaffs_isdentry: cdate\n");
                 return 0;
@@ -803,7 +803,7 @@ inode_walk_dent_act(TSK_FS_FILE * fs_file, const char *a_path, void *a_ptr)
     return TSK_WALK_CONT;
 }
 
-/* fatfs_dinode_load - look up disk inode & load into fatfs_dentry structure
+/* xtaffs_dinode_load - look up disk inode & load into xtaffs_dentry structure
  *
  * return 1 on error and 0 on success
  * */
@@ -825,7 +825,7 @@ xtaffs_dinode_load(TSK_FS_INFO * fs, xtaffs_dentry * dep, TSK_INUM_T inum)
         || (inum > fs->last_inum - XTAFFS_NUM_SPECFILE)) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
-        tsk_error_set_errstr("fatfs_dinode_load: address: %" PRIuINUM,
+        tsk_error_set_errstr("xtaffs_dinode_load: address: %" PRIuINUM,
             inum);
         return 1;
     }                           /* Get the sector that this inode would be in and its offset */
@@ -1449,7 +1449,7 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
     //        "xtaffs_inode_lookup: reading sector %" PRIuDADDR
     //        " for inode %" PRIuINUM "\n", sect, inum);
 
-    if (fatfs_dinode_load(fs, &dep, inum)) {
+    if (xtaffs_dinode_load(fs, &dep, inum)) {
         return 1;
     }
 
@@ -1459,7 +1459,7 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
      * Other places use information about if the sector is part of a folder
      * or not, but we don't have that...  so we could let some corrupt things
      * pass in here that get caught else where. */
-    if (xtaffs_isdentry(xtaffs, &dep, fatfs_is_sectalloc(fatfs, sect))) {
+    if (xtaffs_isdentry(xtaffs, &dep, xtaffs_is_sectalloc(xtaffs, sect))) {
         if ((retval =
                 xtaffs_dinode_copy(xtaffs, a_fs_file->meta, &dep, sect,
                     inum)) != TSK_OK) {
@@ -1820,7 +1820,7 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
                 tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
                 tsk_error_set_errstr
                     ("xtaffs_make_data_run: Invalid sector address in FAT (too large): %"
-                    PRIuDADDR " (plus %d sectors)", sbase, fatfs->csize);
+                    PRIuDADDR " (plus %d sectors)", sbase, xtaffs->csize);
                 return 1;
             }
 

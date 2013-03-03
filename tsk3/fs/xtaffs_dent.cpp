@@ -85,18 +85,18 @@ static TSK_WALK_RET_ENUM
 *
 * Assumes that you already have the lock
 */
-static std::map<TSK_INUM_T, TSK_INUM_T> * getParentMap(FATFS_INFO *fatfs) {
+static std::map<TSK_INUM_T, TSK_INUM_T> * getParentMap(XTAFFS_INFO *xtaffs) {
     // allocate it if it hasn't already been 
-    if (fatfs->inum2par == NULL) {
-        fatfs->inum2par = new std::map<TSK_INUM_T, TSK_INUM_T>;
+    if (xtaffs->inum2par == NULL) {
+        xtaffs->inum2par = new std::map<TSK_INUM_T, TSK_INUM_T>;
     }
-    return (std::map<TSK_INUM_T, TSK_INUM_T> *)fatfs->inum2par;
+    return (std::map<TSK_INUM_T, TSK_INUM_T> *)xtaffs->inum2par;
 }
 
 /**
 * Adds an entry to the parent directory map.  Used to make further processing
 * faster.
-* @param fatfs File system
+* @param xtaffs File system
 * @param par_inum Parent folder meta data address.
 * @param dir_inum Sub-folder meta data address.
 * @returns 0
@@ -115,7 +115,7 @@ uint8_t
 
 /**
 * Looks up the parent meta address for a child from the cached list.
-* @param fatfs File system
+* @param xtaffs File system
 * @param dir_inum Inode of sub-directory to look up
 * @param par_inum [out] Result of lookup
 * @returns 0 if found and 1 if not. 
@@ -305,16 +305,15 @@ static TSK_RETVAL_ENUM
             * extension and we add a note at the end that it is a label */
             if ((dir->attrib & XTAFFS_ATTR_VOLUME) ==
                 XTAFFS_ATTR_VOLUME) {
-                    a = 0;
+                a = 0;
 
-                    for (b = 0; b < 42; b++) {
-                        if(dir->name[b] < 33 || dir->name[b] > 126) break;
-                        if ((dir->name[b] >= 0x20) && (dir->name[b] != 0xff)) {
-                            fs_name->name[a++] = dir->name[b];
-                        }
-                        else {
-                            fs_name->name[a++] = '^';
-                        }
+                for (b = 0; b < 42; b++) {
+                    if(dir->name[b] < 33 || dir->name[b] > 126) break;
+                    if ((dir->name[b] >= 0x20) && (dir->name[b] != 0xff)) {
+                        fs_name->name[a++] = dir->name[b];
+                    }
+                    else {
+                        fs_name->name[a++] = '^';
                     }
                 }
 
@@ -387,7 +386,7 @@ static TSK_RETVAL_ENUM
                 else if (fs_name->name[1] == '.') {
                     uint8_t dir_found = 0;
 
-                    if (fatfs_dir_buf_get(fatfs, a_fs_dir->fs_file->meta->addr, &(fs_name->meta_addr)) == 0)  {
+                    if (xtaffs_dir_buf_get(xtaffs, a_fs_dir->fs_file->meta->addr, &(fs_name->meta_addr)) == 0)  {
                         dir_found = 1;
                     }
 
@@ -419,7 +418,7 @@ static TSK_RETVAL_ENUM
                             fprintf(stderr,
                             "xtaffs_dent_parse_buf: Finished walking directory to find parent\n");
 
-                        if (fatfs_dir_buf_get(fatfs, a_fs_dir->fs_file->meta->addr, &(fs_name->meta_addr)) == 0) {
+                        if (xtaffs_dir_buf_get(xtaffs, a_fs_dir->fs_file->meta->addr, &(fs_name->meta_addr)) == 0) {
                             dir_found = 1;
                         }
 
