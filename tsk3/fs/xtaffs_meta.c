@@ -446,10 +446,10 @@ xtaffs_make_root(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta)
     }
     addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
 
-    /* TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16 don't use the FAT for root directory, so
-     * we will have to fake it.
+    /* The original FAT12 and FAT16 didn't use the FAT for root directory, so
+     * we had to fake it. AJN TODO: Is this true in XTAF?
      */
-    if (xtaffs->fs_info.ftype != TSK_FS_TYPE_FAT32) {
+    if (xtaffs->fs_info.ftype != TSK_FS_TYPE_XTAF32) {
         TSK_DADDR_T snum;
 
         /* Other code will have to check this as a special condition
@@ -974,7 +974,7 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         size_t sidx;            // sector index for loop
         uint8_t basicTest;      // 1 if only a basic dentry test is needed
 
-        /* This occurs for the root directory of TSK_FS_TYPE_FAT12/16
+        /* This occurs for the root directory of FAT12/16
          *
          * We are going to process the image in clusters, so take care of the root
          * directory seperately.
@@ -1438,7 +1438,7 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
      * are not in the FAT.  Except for FAT32 root dirs, those are normal.
      */
     if ((a_fs_file->meta->addr == XTAFFS_ROOTINO)
-        && (fs->ftype != TSK_FS_TYPE_FAT32) && (clust == 1)) {
+        && (fs->ftype != TSK_FS_TYPE_XTAF32) && (clust == 1)) {
         TSK_FS_ATTR_RUN *data_run;
 
         if (tsk_verbose)

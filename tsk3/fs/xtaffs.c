@@ -175,12 +175,12 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
     }
 
     switch (xtaffs->fs_info.ftype) {
-    case TSK_FS_TYPE_FAT12:
+    case TSK_FS_TYPE_XTAF12:
         if (clust & 0xf000) {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_ARG);
             tsk_error_set_errstr
-                ("xtaffs_getFAT: TSK_FS_TYPE_FAT12 Cluster %" PRIuDADDR
+                ("xtaffs_getFAT: TSK_FS_TYPE_XTAF12 Cluster %" PRIuDADDR
                 " too large", clust);
             return 1;
         }
@@ -219,7 +219,7 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
                     tsk_error_set_errno(TSK_ERR_FS_READ);
                 }
                 tsk_error_set_errstr2
-                    ("xtaffs_getFAT: TSK_FS_TYPE_FAT12 FAT overlap: %"
+                    ("xtaffs_getFAT: TSK_FS_TYPE_XTAF12 FAT overlap: %"
                     PRIuDADDR, sect);
                 return 1;
             }
@@ -246,14 +246,14 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
             (*value < (0x0ffffff7 & XTAFFS_12_MASK))) {
             if (tsk_verbose)
                 tsk_fprintf(stderr,
-                    "xtaffs_getFAT: TSK_FS_TYPE_FAT12 cluster (%" PRIuDADDR
+                    "xtaffs_getFAT: TSK_FS_TYPE_XTAF12 cluster (%" PRIuDADDR
                     ") too large (%" PRIuDADDR ") - resetting\n", clust,
                     *value);
             *value = 0;
         }
         return 0;
 
-    case TSK_FS_TYPE_FAT16:
+    case TSK_FS_TYPE_XTAF16:
         /* Get sector in FAT for cluster and load it if needed */
         sect = xtaffs->firstfatsect + ((clust << 1) >> xtaffs->ssize_sh);
 
@@ -279,13 +279,13 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
             (*value < (0x0ffffff7 & XTAFFS_16_MASK))) {
             if (tsk_verbose)
                 tsk_fprintf(stderr,
-                    "xtaffs_getFAT: contents of TSK_FS_TYPE_FAT16 entry %"
+                    "xtaffs_getFAT: contents of TSK_FS_TYPE_XTAF16 entry %"
                     PRIuDADDR " too large - resetting\n", clust);
             *value = 0;
         }
         return 0;
 
-    case TSK_FS_TYPE_FAT32:
+    case TSK_FS_TYPE_XTAF32:
         /* Get sector in FAT for cluster and load if needed */
         sect = xtaffs->firstfatsect + ((clust << 2) >> xtaffs->ssize_sh);
 
@@ -780,16 +780,16 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "--------------------------------------------\n");
 
     tsk_fprintf(hFile, "File System Type: FAT");
-    if (fs->ftype == TSK_FS_TYPE_FAT12)
+    if (fs->ftype == TSK_FS_TYPE_XTAF12)
         tsk_fprintf(hFile, "12\n");
-    else if (fs->ftype == TSK_FS_TYPE_FAT16)
+    else if (fs->ftype == TSK_FS_TYPE_XTAF16)
         tsk_fprintf(hFile, "16\n");
-    else if (fs->ftype == TSK_FS_TYPE_FAT32)
+    else if (fs->ftype == TSK_FS_TYPE_XTAF32)
         tsk_fprintf(hFile, "32\n");
     else
         tsk_fprintf(hFile, "\n");
 
-    if (xtaffs->fs_info.ftype != TSK_FS_TYPE_FAT32) {
+    if (xtaffs->fs_info.ftype != TSK_FS_TYPE_XTAF32) {
         tsk_fprintf(hFile, "Serial number: 0x%" PRIx32 "\n",
             tsk_getu32(fs->endian, sb->serial_number));
 
@@ -847,7 +847,7 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "* Data Area: %" PRIuDADDR " - %" PRIuDADDR "\n",
         xtaffs->firstdatasect, fs->last_block);
 
-    if (xtaffs->fs_info.ftype != TSK_FS_TYPE_FAT32) {
+    if (xtaffs->fs_info.ftype != TSK_FS_TYPE_XTAF32) {
         TSK_DADDR_T x = xtaffs->csize * xtaffs->clustcnt;
 
         tsk_fprintf(hFile,
@@ -1296,7 +1296,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
     /* Look for the boot sector. We loop because
      * we will try the backup if the first fails.
-     * Only FAT32 has a backup though...*/
+     * Only FAT32 was known to have a backup though, and XTAF32's backups haven't been seen yet... */
     for (i = 0; i < 2; i++) {
         TSK_OFF_T sb_off;
 
@@ -1424,7 +1424,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         return NULL;
     }
 
-    /* We can't do a sanity check on this b.c. TSK_FS_TYPE_FAT32 has a value of 0 */
+    /* We can't do a sanity check on this b.c. TSK_FS_TYPE_XTAF32 has a value of 0 */ /* AJN TODO Did we write this line? Try a sanity check anyway. */
     /* num of root entries */
     //xtaffs->numroot = tsk_getu16(fs->endian, fatsb->numroot);
     xtaffs->numroot = (uint16_t) 1; /*AJN TODO Why did we hard-code this?*/
@@ -1548,8 +1548,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
      * The sector of the begining of the data area  - which is 
      * after all of the FATs
      *
-     * For TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16, the data area starts with the root
-     * directory entries and then the first cluster.  For TSK_FS_TYPE_FAT32,
+     * For TSK_FS_TYPE_XTAF12 and TSK_FS_TYPE_XTAF16, the data area starts with the root
+     * directory entries and then the first cluster.  For TSK_FS_TYPE_XTAF32,
      * the data area starts with clusters and the root directory
      * is somewhere in the data area
      */
@@ -1563,9 +1563,9 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     /* The sector where the first cluster is located.  It will be used
      * to translate cluster addresses to sector addresses 
      *
-     * For TSK_FS_TYPE_FAT32, the first cluster is the start of the data area and
-     * it is after the root directory for TSK_FS_TYPE_FAT12 and TSK_FS_TYPE_FAT16.  At this
-     * point in the program, numroot is set to 0 for TSK_FS_TYPE_FAT32
+     * For the original FAT32, the first cluster is the start of the data area and
+     * it is after the root directory for FAT12 and FAT16.  At this
+     * point in the program, numroot is set to 0 in the original FAT32
      */
 
     /* total number of clusters */
@@ -1582,13 +1582,13 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
      *
      * A FAT file system made by another OS could use different values
      */
-    if (ftype == TSK_FS_TYPE_XTAF) {
+    if (ftype == TSK_FS_TYPE_XTAF_DETECT) {
 
         if (xtaffs->clustcnt < 0xfff4) {
-            ftype = TSK_FS_TYPE_FAT16;
+            ftype = TSK_FS_TYPE_XTAF16;
         }
         else {
-            ftype = TSK_FS_TYPE_FAT32;
+            ftype = TSK_FS_TYPE_XTAF32;
         }
 
         xtaffs->fs_info.ftype = ftype;
@@ -1596,7 +1596,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
     /* Some sanity checks */
     else {
-        if ((ftype == TSK_FS_TYPE_FAT12)
+        if ((ftype == TSK_FS_TYPE_XTAF12)
             && (xtaffs->clustcnt >= 4085)) {
             fs->tag = 0;
             free(fatsb);
@@ -1604,7 +1604,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_MAGIC);
             tsk_error_set_errstr
-                ("Too many sectors for TSK_FS_TYPE_FAT12: try auto-detect mode");
+                ("Too many sectors for TSK_FS_TYPE_XTAF12: try auto-detect mode");
             if (tsk_verbose)
                 fprintf(stderr,
                     "xtaffs_open: Too many sectors for FAT12\n");
@@ -1613,27 +1613,27 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 /*
 AJN TODO Why did we comment this out? Is the numroot field missing?
-    if ((ftype == TSK_FS_TYPE_FAT32) && (xtaffs->numroot != 0)) {
+    if ((ftype == TSK_FS_TYPE_XTAF32) && (xtaffs->numroot != 0)) {
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_MAGIC);
         tsk_error_set_errstr
-            ("Invalid TSK_FS_TYPE_FAT32 image (numroot != 0)");
+            ("Invalid TSK_FS_TYPE_XTAF32 image (numroot != 0)");
         if (tsk_verbose)
             fprintf(stderr, "xtaffs_open: numroom != 0 for XTAF32\n");
         return NULL;
     }
 
-    if ((ftype != TSK_FS_TYPE_FAT32) && (xtaffs->numroot == 0)) {
+    if ((ftype != TSK_FS_TYPE_XTAF32) && (xtaffs->numroot == 0)) {
         fs->tag = 0;
         free(fatsb);
         free(xtaffs);
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_MAGIC);
         tsk_error_set_errstr
-            ("Invalid FAT image (numroot == 0, and not TSK_FS_TYPE_FAT32)");
+            ("Invalid FAT image (numroot == 0, and not TSK_FS_TYPE_XTAF32)");
         if (tsk_verbose)
             fprintf(stderr, "xtaffs_open: numroom == 0 and not XTAF32\n");
         return NULL;
@@ -1645,13 +1645,13 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
      */
     if (used_backup_boot) {
         // only FAT32 has backup boot sectors..
-        if (ftype != TSK_FS_TYPE_FAT32) {
+        if (ftype != TSK_FS_TYPE_XTAF32) {
             fs->tag = 0;
             free(xtaffs); /*AJN TODO Check for missed 'fatfs' symbols*/
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_MAGIC);
             tsk_error_set_errstr
-                ("Invalid XTAF image (Used what we thought was a backup boot sector, but it is not TSK_FS_TYPE_FAT32)");
+                ("Invalid XTAF image (Used what we thought was a backup boot sector, but it is not TSK_FS_TYPE_XTAF32)");
             if (tsk_verbose)
                 fprintf(stderr,
                     "xtaffs_open: Had to use backup boot sector, but this isn't XTAF32\n");
@@ -1719,13 +1719,13 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
 
 
     /* Set the mask to use on the cluster values */
-    if (ftype == TSK_FS_TYPE_FAT12) {
+    if (ftype == TSK_FS_TYPE_XTAF12) {
         xtaffs->mask = XTAFFS_12_MASK;
     }
-    else if (ftype == TSK_FS_TYPE_FAT16) {
+    else if (ftype == TSK_FS_TYPE_XTAF16) {
         xtaffs->mask = XTAFFS_16_MASK;
     }
-    else if (ftype == TSK_FS_TYPE_FAT32) {
+    else if (ftype == TSK_FS_TYPE_XTAF32) {
         xtaffs->mask = XTAFFS_32_MASK;
     }
     else {
