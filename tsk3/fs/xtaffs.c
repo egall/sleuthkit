@@ -27,9 +27,7 @@
 #include "tsk_xtaffs.h"
 
 #define XTAF_SECTOR_SIZE 512
-#define XTAF_SECT_PER_FAT 64
 #define XTAF_FIRST_FAT_SECT 8
-#define XTAF_ROOT_SECT 116808 
 #define HD_VOID_AREA 8
 
 /*
@@ -1489,7 +1487,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }else if(img_info->size == 268435456 || offset == 0x120eb0000){
 //        printf("System partition\n");
         xtaffs->rootsect = 80;
-        xtaffs->sectperfat = (uint32_t) XTAF_SECT_PER_FAT;
+        xtaffs->sectperfat = (uint32_t) 64;
         xtaffs->firstclustsect = (TSK_DADDR_T) 112;
         xtaffs->clustcnt = (TSK_DADDR_T) 16384;
         xtaffs->lastclust = (TSK_DADDR_T) 16381;
