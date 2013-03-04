@@ -239,11 +239,11 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
         if (clust & 1)
             tmp16 >>= 4;
 
-        *value = tmp16 & FATFS_12_MASK;
+        *value = tmp16 & XTAFFS_12_MASK;
 
         /* sanity check */
         if ((*value > (xtaffs->lastclust)) &&
-            (*value < (0x0ffffff7 & FATFS_12_MASK))) {
+            (*value < (0x0ffffff7 & XTAFFS_12_MASK))) {
             if (tsk_verbose)
                 tsk_fprintf(stderr,
                     "xtaffs_getFAT: TSK_FS_TYPE_FAT12 cluster (%" PRIuDADDR
@@ -270,13 +270,13 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
             ((sect - xtaffs->fatc_addr[cidx]) << xtaffs->ssize_sh) +
             ((clust << 1) % xtaffs->ssize);
 
-        *value = tsk_getu16(fs->endian, a_ptr) & FATFS_16_MASK;
+        *value = tsk_getu16(fs->endian, a_ptr) & XTAFFS_16_MASK;
 
         tsk_release_lock(&xtaffs->cache_lock);
 
         /* sanity check */
         if ((*value > (xtaffs->lastclust)) &&
-            (*value < (0x0ffffff7 & FATFS_16_MASK))) {
+            (*value < (0x0ffffff7 & XTAFFS_16_MASK))) {
             if (tsk_verbose)
                 tsk_fprintf(stderr,
                     "xtaffs_getFAT: contents of TSK_FS_TYPE_FAT16 entry %"
@@ -302,13 +302,13 @@ xtaffs_getFAT(XTAFFS_INFO * xtaffs, TSK_DADDR_T clust, TSK_DADDR_T * value)
             ((sect - xtaffs->fatc_addr[cidx]) << xtaffs->ssize_sh) +
             (clust << 2) % xtaffs->ssize;
 
-        *value = tsk_getu32(fs->endian, a_ptr) & FATFS_32_MASK;
+        *value = tsk_getu32(fs->endian, a_ptr) & XTAFFS_32_MASK;
 
         tsk_release_lock(&xtaffs->cache_lock);
 
         /* sanity check */
         if ((*value > xtaffs->lastclust) &&
-            (*value < (0x0ffffff7 & FATFS_32_MASK))) {
+            (*value < (0x0ffffff7 & XTAFFS_32_MASK))) {
             if (tsk_verbose)
                 tsk_fprintf(stderr,
                     "xtaffs_getFAT: contents of entry %" PRIuDADDR
@@ -876,7 +876,7 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
 
         clust_p = xtaffs->rootsect;
         clust = XTAFFS_SECT_2_CLUST(xtaffs, xtaffs->rootsect);
-        while ((clust) && (0 == XTAFFS_ISEOF(clust, FATFS_32_MASK))) {
+        while ((clust) && (0 == XTAFFS_ISEOF(clust, XTAFFS_32_MASK))) {
             TSK_DADDR_T nxt;
             clust_p = clust;
 
@@ -1720,13 +1720,13 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
 
     /* Set the mask to use on the cluster values */
     if (ftype == TSK_FS_TYPE_FAT12) {
-        xtaffs->mask = FATFS_12_MASK;
+        xtaffs->mask = XTAFFS_12_MASK;
     }
     else if (ftype == TSK_FS_TYPE_FAT16) {
-        xtaffs->mask = FATFS_16_MASK;
+        xtaffs->mask = XTAFFS_16_MASK;
     }
     else if (ftype == TSK_FS_TYPE_FAT32) {
-        xtaffs->mask = FATFS_32_MASK;
+        xtaffs->mask = XTAFFS_32_MASK;
     }
     else {
         fs->tag = 0;

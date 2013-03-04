@@ -52,16 +52,16 @@ extern "C" {
 #define XTAFFS_MAXNAMLEN_UTF8	1024
 #define XTAFFS_FILE_CONTENT_LEN sizeof(TSK_DADDR_T)      // we will store the starting cluster
 
-/* size of FAT to read into FATFS_INFO each time */
+/* size of FAT to read into XTAFFS_INFO each time */
 /* This must be at least 1024 bytes or else fat12 will get messed up */
 #define FAT_CACHE_N		4       // number of caches
 #define FAT_CACHE_B		4096
 #define FAT_CACHE_S		8       // number of sectors in cache
 
 /* MASK values for FAT entries */
-#define FATFS_12_MASK	0x00000fff
-#define FATFS_16_MASK	0x0000ffff
-#define FATFS_32_MASK	0x0fffffff
+#define XTAFFS_12_MASK	0x00000fff
+#define XTAFFS_16_MASK	0x0000ffff
+#define XTAFFS_32_MASK	0x0fffffff
 
 /* Constants for the FAT entry */
 #define XTAFFS_UNALLOC	0
