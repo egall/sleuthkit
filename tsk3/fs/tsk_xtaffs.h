@@ -293,14 +293,16 @@ extern "C" {
         /* FIrst sector of FAT */
         TSK_DADDR_T firstfatsect;
 
-        /* First sector after FAT  - For TSK_FS_INFO_TYPE_FAT_12 and TSK_FS_INFO_TYPE_FAT_16, this is where the
-         * root directory entries are.  For TSK_FS_INFO_TYPE_FAT_32, this is the the first 
+        /* First sector after FAT  - For the original FAT12 and FAT16, this is where the
+         * root directory entries are.  For FAT32, this is the the first 
          * cluster */
+        /* AJN TODO Clarify this for XTAF */
         TSK_DADDR_T firstdatasect;
 
         /* The sector number were cluster 2 (the first one) is
-         * for TSK_FS_INFO_TYPE_FAT_32, it will be the same as firstdatasect, but for TSK_FS_INFO_TYPE_FAT_12 & 16
+         * for the original FAT32, it will be the same as firstdatasect, but for FAT12 & FAT16
          * it will be the first sector after the Root directory  */
+        /* AJN TODO Clarify this for XTAF */
         TSK_DADDR_T firstclustsect;
 
         /* size of data area in clusters, starting at firstdatasect */
