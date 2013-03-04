@@ -1429,7 +1429,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     /* We can't do a sanity check on this b.c. TSK_FS_TYPE_FAT32 has a value of 0 */
     /* num of root entries */
     //xtaffs->numroot = tsk_getu16(fs->endian, fatsb->numroot);
-    xtaffs->numroot = (uint16_t) 1;
+    xtaffs->numroot = (uint16_t) 1; /*AJN TODO Why did we hard-code this?*/
 
 
     sectors = (TSK_DADDR_T) img_info->size/XTAF_SECTOR_SIZE;
