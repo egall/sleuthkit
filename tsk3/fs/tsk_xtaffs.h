@@ -47,7 +47,6 @@ extern "C" {
 
 
 #define XTAFFS_SBOFF		0
-#define XTAFFS_FS_MAGIC	0xaa55
 #define XTAFFS_MAXNAMLEN	256
 #define XTAFFS_MAXNAMLEN_UTF8	1024
 #define XTAFFS_FILE_CONTENT_LEN sizeof(TSK_DADDR_T)      // we will store the starting cluster

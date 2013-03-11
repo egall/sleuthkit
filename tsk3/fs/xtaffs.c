@@ -1256,7 +1256,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     XTAFFS_INFO *xtaffs;
     unsigned int len;
     TSK_FS_INFO *fs;
-    xtaffs_sb *fatsb;
+    xtaffs_sb *fatsb; /*AJN TODO How often does 'fatsb' occur? It shouldn't anymore.*/
     TSK_DADDR_T sectors;
     ssize_t cnt;
     uint32_t fsopen_numfat, fsopen_csize;
@@ -1319,37 +1319,6 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             return NULL;
         }
         if(!strncmp((char *) fatsb->magic, "XTAF", 4)) break;
-
-        /* Check the magic value and ID endian ordering */
-        if (tsk_fs_guessu16(fs, fatsb->magic, XTAFFS_FS_MAGIC)) {
-
-            // if the magic value is 0, then we will try the backup
-            if ((i == 0)
-                && (tsk_getu16(TSK_LIT_ENDIAN, fatsb->magic) == 0)) {
-                continue;
-            }
-            else {
-                fs->tag = 0;
-                free(fatsb); /*AJN TODO How often does 'fatsb' occur? It shouldn't anymore.*/
-                free(xtaffs);
-                tsk_error_reset();
-                tsk_error_set_errno(TSK_ERR_FS_MAGIC);
-                tsk_error_set_errstr("Not a XTAFFS file system (magic)");
-                if (tsk_verbose)
-                    fprintf(stderr, "xtaffs_open: Incorrect XTAFFS magic\n");
-                return NULL;
-            }
-        }
-        // found the magic
-        else {
-            if (sb_off) {
-                used_backup_boot = 1;
-                if (tsk_verbose)
-                    fprintf(stderr,
-                        "xtaffs_open: Using backup boot sector\n");
-            }
-            break;
-        }
     }
 
     fs->dev_bsize = img_info->sector_size;
