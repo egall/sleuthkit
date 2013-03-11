@@ -676,16 +676,6 @@ TSK_RETVAL_ENUM
         if (fs_name == NULL)
             return TSK_ERR;
 
-        // MBR Entry
-        strncpy(fs_name->name, XTAFFS_MBRNAME, fs_name->name_size);
-        fs_name->meta_addr = XTAFFS_MBRINO(a_fs);
-        fs_name->type = TSK_FS_NAME_TYPE_VIRT;
-        fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
-        if (tsk_fs_dir_add(fs_dir, fs_name)) {
-            tsk_fs_name_free(fs_name);
-            return TSK_ERR;
-        }
-
         // FAT1 Entry
         strncpy(fs_name->name, XTAFFS_FAT1NAME, fs_name->name_size);
         fs_name->meta_addr = XTAFFS_FAT1INO(a_fs);

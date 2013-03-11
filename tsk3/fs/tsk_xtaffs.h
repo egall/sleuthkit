@@ -31,11 +31,7 @@ extern "C" {
 #define XTAFFS_FIRST_NORMINO 3
 
     // special files go at end of inode list (before $OrphanFiles)
-#define XTAFFS_NUM_SPECFILE  4   // includes MBR, FAT1, FAT2, and Orphans
-
-#define XTAFFS_MBRINO(fs_info) \
-    (TSK_FS_ORPHANDIR_INUM(fs_info) - 3)        // inode for master boot record "special file"
-#define XTAFFS_MBRNAME   "$MBR"
+#define XTAFFS_NUM_SPECFILE  3   // includes FAT1, FAT2, and Orphans
 
 #define XTAFFS_FAT1INO(fs_info) \
     (TSK_FS_ORPHANDIR_INUM(fs_info) - 2)        // inode for FAT1 "special file"
