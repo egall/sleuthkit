@@ -46,29 +46,36 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
     /* The time and date masks and shifts are from the py360 project */
     /* The year offset py360 used, 1980, differs from the offset C's mktime() needed, 80.*/
     memset(&tm1, 0, sizeof(struct tm));
-    tm1.tm_sec = (time & XTAFFS_SEC_MASK) * 2;
-    if ((tm1.tm_sec < 0) || (tm1.tm_sec > 59)){
+
+    /* XTAF records seconds at a 2-second resolution. */
+    uint16_t xtaf_seconds = (time & XTAFFS_SEC_MASK);
+    if ((xtaf_seconds < XTAFFS_SEC_MIN) || (xtaf_seconds > XTAFFS_SEC_MAX)){
         tm1.tm_sec = 0;
+    } else {
+        tm1.tm_sec = xtaf_seconds * 2;
     }
 
     tm1.tm_min = (time & XTAFFS_MIN_MASK) >> XTAFFS_MIN_SHIFT ;
-    if ((tm1.tm_min < 0) || (tm1.tm_min > 59)){
+    if ((tm1.tm_min < XTAFFS_MIN_MIN) || (tm1.tm_min > XTAFFS_MIN_MAX)){
         tm1.tm_min = 0;
     }
 
     tm1.tm_hour = (time & XTAFFS_HOUR_MASK) >> XTAFFS_HOUR_SHIFT;
-    if ((tm1.tm_hour < 0) || (tm1.tm_hour > 23)){
+    if ((tm1.tm_hour < XTAFFS_HOUR_MIN) || (tm1.tm_hour > XTAFFS_HOUR_MAX)){
         tm1.tm_hour = 0;
     }
 
     tm1.tm_mday = (date & XTAFFS_DAY_MASK) >> XTAFFS_DAY_SHIFT;
-    if ((tm1.tm_mday < 1) || (tm1.tm_mday > 31)){
+    if ((tm1.tm_mday < XTAFFS_DAY_MIN) || (tm1.tm_mday > XTAFFS_DAY_MAX)){
         tm1.tm_mday = 0;
     }
 
-    tm1.tm_mon = (date & XTAFFS_MON_MASK) >> XTAFFS_MON_SHIFT ;
-    if ((tm1.tm_mon < 0) || (tm1.tm_mon > 11)){
+    /* Note that tm_mon has the value range [0..11], while XTAF records [1..12]. */
+    uint16_t xtaf_months = (date & XTAFFS_MON_MASK) >> XTAFFS_MON_SHIFT;
+    if ((xtaf_months < XTAFFS_MON_MIN) || (xtaf_months > XTAFFS_MON_MAX)){
         tm1.tm_mon = 0;
+    } else {
+        tm1.tm_mon = xtaf_months - 1;
     } 
 
 
@@ -77,8 +84,8 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
      * the maximum UNIX time is Tue Jan 19 03:14:07 2038
      */
     tm1.tm_year = (date & XTAFFS_YEAR_MASK ) >> XTAFFS_YEAR_SHIFT;
-    /* The check against 127: There are only 7 bits that are supposed to be used for the year value.  If that comes out to bigger than 127, something went wrong. */
-    if ((tm1.tm_year < 0) || (tm1.tm_year > 127)){
+    /* The check against 127: There are only 7 bits that are supposed to be used for the year value.  If that comes out to bigger than 127 (XTAFFS_YEAR_MAX), something went wrong. */
+    if ((tm1.tm_year < XTAFFS_YEAR_MIN) || (tm1.tm_year > XTAFFS_YEAR_MAX)){
         tm1.tm_year = 0;
     }
     else{
@@ -89,8 +96,8 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
      * it out */
     tm1.tm_isdst = -1;
 
-
-    ret = mktime(&tm1);
+    /* Use timegm() to force GMT timezone. */
+    ret = timegm(&tm1);
 
     if (ret < 0) {
         if (tsk_verbose)
