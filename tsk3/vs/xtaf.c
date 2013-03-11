@@ -83,19 +83,21 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         /*  NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy */
         cnt = tsk_img_read(img_info, offsets[itor], (char *) xtafsb, len);
         if(strncmp((char*) xtafsb->magic, "XTAF", 4)){
-            printf("Part %d not XTAF file system\n", itor);
+            tsk_fprintf(stderr, "Part %d not XTAF file system\n", itor);
 //            return NULL;
             continue;
         }    
         if(itor == 0){
-            printf("Part 0\n");
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             continue; //EQS NOTE: This partition has a different structure so it is skipped over
             TSK_VS_PART_INFO* part_0x80000;
             part_0x80000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80000));
             part_0x80000  = tsk_vs_part_add(vs, 1024, 4194304, TSK_VS_PART_FLAG_ALLOC, NULL, 0, 0);
         }
         if(itor == 1){
-            printf("Part 1\n");
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             continue; //EQS NOTE: This partition has a different structure so it is skipped over
             TSK_VS_PART_INFO* part_0x80080000;
             part_0x80080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80080000));
@@ -103,28 +105,32 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 
         }
         if(itor == 2){
-            printf("Part 2\n");
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             TSK_VS_PART_INFO* part_0x10C080000;
             part_0x10C080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x10C080000));
             part_0x10C080000  = tsk_vs_part_add(vs, 8782848, 422272, TSK_VS_PART_FLAG_ALLOC, NULL, 0, 0);
 
         }
         if(itor == 3){
-            printf("Part 3\n");
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             TSK_VS_PART_INFO* part_0x118eb0000;
             part_0x118eb0000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x118eb0000));
             part_0x118eb0000  = tsk_vs_part_add(vs, 9205120, 262144, TSK_VS_PART_FLAG_ALLOC, NULL, 0, 0);
 
         }
         if(itor == 4){
-            printf("Part 4\n");
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             TSK_VS_PART_INFO* part_sys;
             part_sys = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_sys));
             part_sys  = tsk_vs_part_add(vs, 9467264, 524288, TSK_VS_PART_FLAG_ALLOC, NULL, 0, 0);
 
         }
         if(itor == 5){
-            printf("Part 5\n");
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             TSK_VS_PART_INFO* part_data;
             part_data = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_data));
             part_data  = tsk_vs_part_add(vs, 9991552, 478405616, TSK_VS_PART_FLAG_ALLOC, NULL, 0, 0);
