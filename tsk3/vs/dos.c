@@ -851,11 +851,11 @@ dos_load_prim_table(TSK_VS_INFO * vs, uint8_t test)
         tsk_error_set_errno(TSK_ERR_VS_MAGIC);
         tsk_error_set_errstr
             ("File is not a DOS partition (invalid primary magic) (Sector: %"
-            PRIuDADDR ")", taddr);
+            PRIuDADDR ")\n", taddr);
         if (tsk_verbose)
             fprintf(stderr,
                 "File is not a DOS partition (invalid primary magic) (Sector: %"
-                PRIuDADDR ")", taddr);
+                PRIuDADDR ")\n", taddr);
         free(sect_buf);
         return 1;
     }
