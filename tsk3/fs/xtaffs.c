@@ -792,32 +792,10 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     if (xtaffs->fs_info.ftype != TSK_FS_TYPE_XTAF32) {
         tsk_fprintf(hFile, "Serial number: 0x%" PRIx32 "\n",
             tsk_getu32(fs->endian, sb->serial_number));
-
-        if ((de) && (de->name)) {
-            tsk_fprintf(hFile,
-                "Volume Label (Root Directory): %c%c%c%c%c%c%c%c\n",
-                de->name[0], de->name[1], de->name[2], de->name[3],
-                de->name[4], de->name[5], de->name[6], de->name[7]);
-        }
-        else {
-            tsk_fprintf(hFile, "Volume Label (Root Directory):\n");
-        }
     }
     else {
-
         tsk_fprintf(hFile, "Serial number: 0x%" PRIx32 "\n",
             tsk_getu32(fs->endian, sb->serial_number));
-
-        if ((de) && (de->name)) {
-            tsk_fprintf(hFile,
-                "Volume Label (Root Directory): %c%c%c%c%c%c%c%c\n",
-                de->name[0], de->name[1], de->name[2], de->name[3],
-                de->name[4], de->name[5], de->name[6], de->name[7]);
-        }
-        else {
-            tsk_fprintf(hFile, "Volume Label (Root Directory):\n");
-        }
-
     }
 
     free(data_buf);
