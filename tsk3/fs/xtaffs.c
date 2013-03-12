@@ -779,7 +779,7 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "FILE SYSTEM INFORMATION\n");
     tsk_fprintf(hFile, "--------------------------------------------\n");
 
-    tsk_fprintf(hFile, "File System Type: FAT");
+    tsk_fprintf(hFile, "File System Type: XTAF");
     if (fs->ftype == TSK_FS_TYPE_XTAF12)
         tsk_fprintf(hFile, "12\n");
     else if (fs->ftype == TSK_FS_TYPE_XTAF16)
