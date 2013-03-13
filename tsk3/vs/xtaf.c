@@ -92,7 +92,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             if (tsk_verbose)
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 4, "XTAF");
+            snprintf(part_label, 5, "XTAF");
 
             TSK_VS_PART_INFO* part_0x80000;
             part_0x80000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80000));
@@ -107,7 +107,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             if (tsk_verbose)
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 4, "XTAF");
+            snprintf(part_label, 5, "XTAF");
 
             TSK_VS_PART_INFO* part_0x80080000;
             part_0x80080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80080000));
@@ -121,7 +121,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             if (tsk_verbose)
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 4, "XTAF");
+            snprintf(part_label, 5, "XTAF");
 
             TSK_VS_PART_INFO* part_0x10C080000;
             part_0x10C080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x10C080000));
@@ -135,7 +135,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             if (tsk_verbose)
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 4, "XTAF");
+            snprintf(part_label, 5, "XTAF");
 
             TSK_VS_PART_INFO* part_0x118eb0000;
             part_0x118eb0000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x118eb0000));
@@ -149,7 +149,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             if (tsk_verbose)
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 4, "XTAF");
+            snprintf(part_label, 5, "XTAF");
 
             TSK_VS_PART_INFO* part_sys;
             part_sys = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_sys));
@@ -163,7 +163,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             if (tsk_verbose)
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
             part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 4, "XTAF");
+            snprintf(part_label, 5, "XTAF");
 
             TSK_VS_PART_INFO* part_data;
             part_data = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_data));
