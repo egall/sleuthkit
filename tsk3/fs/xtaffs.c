@@ -1333,7 +1333,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
     // cluster size 
     fsopen_csize = tsk_getu32(fs->endian, fatsb->csize);
-    if(fsopen_csize > 256) printf("Sectors per cluster is more than 256!\n");
+    if(fsopen_csize > 256) fprintf(stderr, "%s: Warning: Sectors-per-cluster is more than 256!\n", myname);
     xtaffs->csize = (uint8_t) fsopen_csize; 
     if ((xtaffs->csize != 0x01) &&
         (xtaffs->csize != 0x02) &&
