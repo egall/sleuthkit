@@ -426,9 +426,11 @@ reg_load_attrs(TSK_FS_FILE * a_fs_file)
       free(db_cell);
     }
 
+    if (data_length > 0) {
     tsk_fs_attr_set_str(a_fs_file, type_attr,
 			NULL, TSK_FS_ATTR_TYPE_NTFS_DATA,
 			1, data_data, data_length);
+    }
     free(data_data);
 
 
