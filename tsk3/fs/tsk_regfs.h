@@ -245,18 +245,18 @@ extern "C" {
 /* 0x2C */    uint8_t ignored4[4];    ///< Unusued for parsing.
 /* 0x30 */    uint8_t hive_name[64]; ///< in unicode. TODO(wb): find exact length
 /* 0x70 */    uint8_t ignored[HBIN_SIZE - 0x70];
-  } REGF;
+  } REGFS_REGF;
 
   typedef struct {
 /* 0x00 */    uint8_t magic[4];  ///< "hbin"
 /* 0x04 */    uint8_t offset[4]; ///< relative offset from first HBIN (0x1000)
 /* 0x08 */    uint8_t length[4]; ///< length of this HBIN.
 /* 0x0C */    uint8_t unused[0x14];
-  } HBIN;
+  } REGFS_HBIN;
 
   typedef struct {
     TSK_FS_INFO fs_info;    /* super class */
-    REGF regf;
+    REGFS_REGF regf;
     
     uint8_t synchronized;
     TSK_DADDR_T first_key_offset;
