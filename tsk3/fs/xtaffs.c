@@ -1240,6 +1240,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     uint32_t fsopen_numfat, fsopen_csize;
     int i;
     uint8_t used_backup_boot = 0;       // set to 1 if we used the backup boot sector
+    int is_xtaf = 0;
 
     // clean up any error messages that are lying around
     tsk_error_reset();
@@ -1296,7 +1297,16 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             free(xtaffs);
             return NULL;
         }
-        if(!strncmp((char *) fatsb->magic, "XTAF", 4)) break;
+        // If the XTAF lable is found we're done, break out of loop
+        if(!strncmp((char *) fatsb->magic, "XTAF", 4)){
+          is_xtaf = 1;
+          break;
+        }
+    }
+    if(is_xtaf == 0){
+        free(fatsb);
+        free(xtaffs);
+        return NULL;
     }
 
     fs->dev_bsize = img_info->sector_size;
