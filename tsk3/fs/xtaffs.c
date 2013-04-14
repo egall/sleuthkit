@@ -1297,7 +1297,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             free(xtaffs);
             return NULL;
         }
-        // If the XTAF lable is found we're done, break out of loop
+        // If the XTAF label is found we're done, break out of loop
         if(!strncmp((char *) fatsb->magic, "XTAF", 4)){
           is_xtaf = 1;
           break;
