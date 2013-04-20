@@ -747,6 +747,7 @@ xtaffs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     }
 
 
+    /* AJN TODO Replace this with an XTAF function that reads name.txt */
     /* Read the root directory sector so that we can get the volume
      * label from it */
     cnt = tsk_fs_read_block(fs, xtaffs->rootsect, data_buf, fs->block_size);
