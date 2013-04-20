@@ -24,6 +24,7 @@
 #include "plugin.h"
 #include "unicode_escape.h"
 #include "tsk3/fs/tsk_fatfs.h"
+#include "tsk3/fs/tsk_xtaffs.h"
 
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
@@ -422,6 +423,12 @@ int proc_fs(TSK_IMG_INFO * img_info, TSK_OFF_T start)
     else
     {
         partition_info("block_size",fs_info->block_size);
+    }
+
+    /*Special Processing for XTAF to report root offset*/
+    if(TSK_FS_TYPE_ISXTAF(fs_info->ftype))
+    {
+        partition_info("xtaf:root_directory_offset",((XTAFFS_INFO *)fs_info)->rootsect * 512);
     }
 
     partition_info("ftype",fs_info->ftype);
