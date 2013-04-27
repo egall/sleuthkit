@@ -650,9 +650,9 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
             && (tsk_getu16(fs->endian, de->wdate) == 0)
             && (XTAFFS_DENTRY_CLUST(fs, de) == 0)
             && (tsk_getu32(fs->endian, de->size) == 0)) {
-            if (tsk_verbose)
-                fprintf(stderr,
-                    "xtaffs_isdentry: nearly all values zero\n");
+//            if (tsk_verbose)
+//                fprintf(stderr,
+//                    "xtaffs_isdentry: nearly all values zero\n");
             return 0;
         }
 
@@ -759,6 +759,10 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
 {
     char *myname = "xtaffs_inode_walk";
     XTAFFS_INFO *xtaffs = (XTAFFS_INFO *) fs;
+    if (tsk_verbose) {
+        tsk_fprintf(stderr, "%s: AJN DEBUG: fs = %" PRIu64 "\n", myname, fs);
+        tsk_fprintf(stderr, "%s: AJN DEBUG: xtaffs = %" PRIu64 "\n", myname, xtaffs);
+    }
     TSK_INUM_T end_inum_tmp;
     TSK_FS_FILE *fs_file;
     TSK_DADDR_T sect, ssect, lsect;
@@ -975,7 +979,14 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         free(sect_alloc);
         return 1;
     }
+    uint64_t ajn_loop_iter = -1;
     while (sect <= lsect) {
+        ajn_loop_iter += 1;
+        if (tsk_verbose) {
+            tsk_fprintf(stderr, "%s: AJN DEBUG: ajn_loop_iter = %" PRIu64 "\n", myname, ajn_loop_iter);
+            tsk_fprintf(stderr, "%s: AJN DEBUG: fs = %" PRIu64 "\n", myname, fs);
+            tsk_fprintf(stderr, "%s: AJN DEBUG: xtaffs = %" PRIu64 "\n", myname, xtaffs);
+        }
         int clustalloc;         // 1 if current sector / cluster is allocated
         size_t sect_proc;       // number of sectors read for this loop
         size_t sidx;            // sector index for loop
@@ -1024,6 +1035,11 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             /* if the cluster is not allocated, then do not go into it if we
              * only want allocated/link entries
              * If it is allocated, then go into it no matter what
+             */
+            /* AJN TODO In Issue #21's error case, xtaffs is NULL at the time the error is raised.  Yet, fs is non-NULL on the calling function's invocation.  Hence, this function shouldn't be called; but what in this loop is setting fs to NULL? 
+             * tsk_fs_read_block?  Not directly...
+             * tsk_fs_read_block / tsk_img_read? Unlikely; fs is not passed, fs->img_inf is passed.
+             * tsk_fs_read_block / fs_prepost_read? Nope.
              */
             clustalloc = xtaffs_is_sectalloc(xtaffs, sect);
             if (clustalloc == -1) {
