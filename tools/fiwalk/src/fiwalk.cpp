@@ -679,11 +679,11 @@ int main(int argc, char * const *argv1)
     /* output per-run metadata for XML output */
     if(x){
 	/* Output Dublin Core information */
-	x->push("dfxml","version='1.0'");
-	x->push("metadata",
+	x->push("dfxml",
 		"\n  xmlns='http://www.forensicswiki.org/wiki/Category:Digital_Forensics_XML'"
 		"\n  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' "
-		"\n  xmlns:dc='http://purl.org/dc/elements/1.1/'" );
+		"\n  version='1.0'" );
+	x->push("metadata", "xmlns:dc='http://purl.org/dc/elements/1.1/'");
 	x->xmlout("dc:type","Disk Image",fw_empty,false);
 	x->pop();
 	    
