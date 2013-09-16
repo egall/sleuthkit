@@ -19,7 +19,7 @@
 #include "TskImageFile.h"
 #include "Services/TskImgDB.h"
 #include "Services/Log.h"
-#include "tsk3/libtsk.h"
+#include "tsk/libtsk.h"
 
 #include <vector>
 #include <map>

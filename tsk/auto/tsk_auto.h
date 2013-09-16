@@ -26,10 +26,10 @@
 
 // Include the other TSK header files
 
-#include "tsk3/base/tsk_base.h"
-#include "tsk3/img/tsk_img.h"
-#include "tsk3/vs/tsk_vs.h"
-#include "tsk3/fs/tsk_fs.h"
+#include "tsk/base/tsk_base.h"
+#include "tsk/img/tsk_img.h"
+#include "tsk/vs/tsk_vs.h"
+#include "tsk/fs/tsk_fs.h"
 
 #include <string>
 #include <vector>

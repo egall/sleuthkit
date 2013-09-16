@@ -20,10 +20,10 @@
 #ifdef __cplusplus
 
 // Include the other internal TSK header files
-#include "tsk3/base/tsk_base_i.h"
-#include "tsk3/img/tsk_img_i.h"
-#include "tsk3/vs/tsk_vs_i.h"
-#include "tsk3/fs/tsk_fs_i.h"
+#include "tsk/base/tsk_base_i.h"
+#include "tsk/img/tsk_img_i.h"
+#include "tsk/vs/tsk_vs_i.h"
+#include "tsk/fs/tsk_fs_i.h"
 
 // Include the external file 
 #include "tsk_auto.h"

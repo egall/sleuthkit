@@ -1,5 +1,5 @@
 #include "tsk_fs_i.h"
-#include "tsk3/vs/tsk_vs_i.h"
+#include "tsk/vs/tsk_vs_i.h"
 
 /**
 * \internal

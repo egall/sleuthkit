@@ -16,7 +16,7 @@
 
 
 // Include the other internal TSK header files
-#include "tsk3/base/tsk_base_i.h"
+#include "tsk/base/tsk_base_i.h"
 
 // include the external header file
 #include "tsk_hashdb.h"

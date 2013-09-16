@@ -22,7 +22,7 @@
 // Framework includes
 #include "TskFile.h"
 #include "Services/TskImgDB.h"
-#include "tsk3/base/tsk_os.h"
+#include "tsk/base/tsk_os.h"
 
 // Poco includes
 #include "Poco/File.h"

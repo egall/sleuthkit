@@ -21,7 +21,7 @@
 #include "TskImageFileTsk.h"
 #include "TskAutoImpl.h"
 #include "Services/TskServices.h"
-#include "tsk3/base/tsk_base_i.h"
+#include "tsk/base/tsk_base_i.h"
 
 
 /**

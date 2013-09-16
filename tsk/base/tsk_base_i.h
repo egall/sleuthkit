@@ -12,7 +12,7 @@
 
 // include the autoconf header file
 #if HAVE_CONFIG_H
-#include "tsk3/tsk_config.h"
+#include "tsk/tsk_config.h"
 #endif
 
 /* Some Linux systems need LARGEFILE64_SOURCE and autoconf does

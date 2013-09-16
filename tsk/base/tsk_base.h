@@ -50,7 +50,7 @@
  * On Win32 (Visual Studio) though, we will not have this file...
  */
 #if !defined(_MSC_VER)
-#include "tsk3/tsk_incs.h"
+#include "tsk/tsk_incs.h"
 #endif
 
 // get some other TSK / OS settings

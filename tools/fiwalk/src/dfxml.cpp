@@ -17,7 +17,7 @@
  */
 
 
-#include "tsk3/tsk_tools_i.h"
+#include "tsk/tsk_tools_i.h"
 
 #include "dfxml.h"
 #include <errno.h>

@@ -11,7 +11,7 @@
 #ifndef _TSK_VERSIONINFO_H
 #define _TSK_VERSIONINFO_H
 
-#include "tsk3/base/tsk_base_i.h"
+#include "tsk/base/tsk_base_i.h"
 
 /** 
  * Class that allows us to determine framework version,

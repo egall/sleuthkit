@@ -1,5 +1,5 @@
 AM_CPPFLAGS = -I../.. -Wall $(CPPUNIT_CFLAGS) 
-LDADD = ../../tsk3/libtsk3.la $(CPPUNIT_LIBS)
+LDADD = ../../tsk/libtsk.la $(CPPUNIT_LIBS)
 LDFLAGS = -static 
 
 noinst_PROGRAMS = test_base

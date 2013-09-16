@@ -16,7 +16,7 @@
 #ifdef __cplusplus
 
 // Include the other TSK header files
-#include "tsk3/libtsk.h"
+#include "tsk/libtsk.h"
 #include "Services/TskImgDB.h"
 #include "Services/Scheduler.h"
 #include <map>

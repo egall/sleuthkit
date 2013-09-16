@@ -13,7 +13,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <tsk3/libtsk.h>
+#include <tsk/libtsk.h>
 
 #define MAX_BUFF_LENGTH 1024
 

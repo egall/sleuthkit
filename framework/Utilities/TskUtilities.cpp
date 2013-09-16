@@ -17,7 +17,7 @@
 // TSK and TSK Framework includes
 #include "TskUtilities.h"
 #include "Services/TskServices.h"
-#include <tsk3/base/tsk_base_i.h>
+#include <tsk/base/tsk_base_i.h>
 
 // Poco Includes
 #include "Poco/UnicodeConverter.h"

@@ -15,7 +15,7 @@
  */
 
 // include the base internal header file
-#include "tsk3/base/tsk_base_i.h"
+#include "tsk/base/tsk_base_i.h"
 
 // include the external disk image header file
 #include "tsk_img.h"

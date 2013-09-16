@@ -23,7 +23,7 @@ using std::string;
 
 #include "tsk_auto_i.h"
 #include "tsk_db_sqlite.h"
-#include "tsk3/hashdb/tsk_hashdb.h"
+#include "tsk/hashdb/tsk_hashdb.h"
 
 #define TSK_ADD_IMAGE_SAVEPOINT "ADDIMAGE"
 

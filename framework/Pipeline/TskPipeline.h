@@ -18,7 +18,7 @@
 #define _TSK_PIPELINE_H
 
 // TSK includes
-#include "tsk3/base/tsk_os.h" // for uint64_t
+#include "tsk/base/tsk_os.h" // for uint64_t
 
 // TSK Framework includes
 #include "TskModule.h"

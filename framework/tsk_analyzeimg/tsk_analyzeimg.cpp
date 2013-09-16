@@ -14,7 +14,7 @@
 #include <string>
 #include <sstream>
 
-#include "tsk3/tsk_tools_i.h" // Needed for tsk_getopt
+#include "tsk/tsk_tools_i.h" // Needed for tsk_getopt
 #include "framework.h"
 #include "Services/TskSchedulerQueue.h"
 #include "Services/TskSystemPropertiesImpl.h"
