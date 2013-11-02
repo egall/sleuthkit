@@ -689,9 +689,11 @@ int main(int argc, char * const *argv1)
     /* output per-run metadata for XML output */
     if(x){
 	/* Output Dublin Core information */
+        //AJN TODO Only add the XTAF namespace declaration if we're running on XTAF storage.
 	x->push("dfxml",
 		"\n  xmlns='http://www.forensicswiki.org/wiki/Category:Digital_Forensics_XML'"
 		"\n  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'"
+		"\n  xmlns:xtaf='http://www.forensicswiki.org/wiki/XTAF'"
 		"\n  xmlns:dc='http://purl.org/dc/elements/1.1/'"
 		"\n  version='1.0'" );
 	x->push("metadata", "");
