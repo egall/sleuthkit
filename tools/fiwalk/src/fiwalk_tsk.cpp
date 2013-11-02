@@ -425,12 +425,6 @@ int proc_fs(TSK_IMG_INFO * img_info, TSK_OFF_T start)
         partition_info("block_size",fs_info->block_size);
     }
 
-    /*Special Processing for XTAF to report root offset*/
-    if(TSK_FS_TYPE_ISXTAF(fs_info->ftype))
-    {
-        partition_info("xtaf:root_directory_offset",((XTAFFS_INFO *)fs_info)->rootsect * 512);
-    }
-
     partition_info("ftype",fs_info->ftype);
     partition_info("ftype_str",tsk_fs_type_toname(fs_info->ftype));
     partition_info("block_count",fs_info->block_count);
@@ -447,6 +441,12 @@ int proc_fs(TSK_IMG_INFO * img_info, TSK_OFF_T start)
     }
     else {
 	dir_walk_flags |= TSK_FS_DIR_WALK_FLAG_UNALLOC;
+    }
+
+    /*Special Processing for XTAF to report root offset*/
+    if(TSK_FS_TYPE_ISXTAF(fs_info->ftype))
+    {
+        partition_info("xtaf:root_directory_offset",((XTAFFS_INFO *)fs_info)->rootsect * 512);
     }
 
     int ret = 0;
