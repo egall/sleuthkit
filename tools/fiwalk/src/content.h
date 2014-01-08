@@ -55,7 +55,9 @@ public:
     sha1_generator	h_sha1;
     md5_generator	h_sectorhash;
     uint64_t sectorhash_counter;
-    seglist segs;			// the segments that make up the file
+    seglist content_segs;			// the segments that make up the file
+    seglist name_segs;			// the segments that make up the name entry (i.e. directory entry)
+    seglist inode_segs;			// the segments that make up the inode (i.e. inode in POSIX file systems, the directory entry in FAT (so, a repeat), or the MFT resident and non-resident entries in NTFS)
     uint64_t total_bytes;
     std::vector<std::string> sectorhashes;	// a vector of sector hashes, if any have been computed
 

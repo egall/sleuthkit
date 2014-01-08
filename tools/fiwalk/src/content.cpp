@@ -247,9 +247,9 @@ void content::write_record()
     if(opt_magic) {
 	file_info("libmagic",validateOrEscapeUTF8(this->filemagic()));
     }
-    if(this->segs.size()>0){
-	string runs = "";
-	for(seglist::const_iterator i = this->segs.begin();i!=this->segs.end();i++){
+    if(this->content_segs.size()>0){
+	string content_runs = "";
+	for(seglist::const_iterator i = this->content_segs.begin();i!=this->content_segs.end();i++){
 	    char buf[1024];
 	    if(i->flags & TSK_FS_BLOCK_FLAG_SPARSE){
 		sprintf(buf,"       <byte_run file_offset='%"PRIu64"' fill='0' len='%"PRIu64"'/>\n",
@@ -277,9 +277,11 @@ void content::write_record()
 	    } else{
 		sprintf(buf,"       <byte_run file_offset='%"PRIu64"' unknown_flags='%d'/>\n",i->file_offset,i->flags);
 	    }
-	    runs += buf;
+	    content_runs += buf;
 	}
-	file_info_xml("byte_runs",runs);
+	file_info_xml("byte_runs",content_runs);
+    }
+    if(this->content_segs.size()>0){
 	if(!invalid){
 	    if(opt_md5  && h_md5.hashed_bytes>0)   file_info(h_md5.final());
 	    if(opt_sha1 && h_sha1.hashed_bytes>0)  file_info(h_sha1.final());
@@ -288,14 +290,14 @@ void content::write_record()
 
     /* This stuff is only if we are creating ARFF output */
     if(a){
-	file_info("fragments",this->segs.size());
+	file_info("fragments",this->content_segs.size());
 	if(img_info->sector_size>0){
-	    if(this->segs.size()>=1){
-		int64_t frag1start = this->segs[0].img_offset / img_info->sector_size;
+	    if(this->content_segs.size()>=1){
+		int64_t frag1start = this->content_segs[0].img_offset / img_info->sector_size;
 		file_info("frag1startsector",frag1start);
 	    }
-	    if(this->segs.size()>=2){
-		int64_t frag2start = this->segs[1].img_offset / img_info->sector_size;
+	    if(this->content_segs.size()>=2){
+		int64_t frag2start = this->content_segs[1].img_offset / img_info->sector_size;
 		file_info("frag2startsector",frag2start);
 	    }
 	}
@@ -321,7 +323,7 @@ void content::add_seg(int64_t img_offset,int64_t fs_offset,
     newseg.file_offset = file_offset;
     newseg.len   = len;
     newseg.flags = flags;
-    this->segs.push_back(newseg);
+    this->content_segs.push_back(newseg);
 }
 
 

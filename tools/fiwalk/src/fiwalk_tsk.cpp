@@ -69,7 +69,7 @@ file_act(TSK_FS_FILE * fs_file, TSK_OFF_T a_off, TSK_DADDR_T addr, char *buf,
     if(opt_debug>1){
 	printf("file_act(fs_file=%p,addr=%"PRIuDADDR" buf=%p size=%d)\n",
 	       fs_file,addr,buf,(int)size);
-	if(opt_debug>1 && ci->segs.size()==0){
+	if(opt_debug>1 && ci->content_segs.size()==0){
 	    if(fwrite(buf,size,1,stdout)!=1) err(1,"fwrite");
 	    printf("\n");
 	}
@@ -102,34 +102,34 @@ file_act(TSK_FS_FILE * fs_file, TSK_OFF_T a_off, TSK_DADDR_T addr, char *buf,
     uint64_t  fs_offset = (addr)*fs_file->fs_info->block_size;
     uint64_t img_offset = current_partition_start + fs_offset;
 
-    if(ci->segs.size()>0){
+    if(ci->content_segs.size()>0){
 	/* Does this next segment fit after the prevous segment logically? */
-	if(ci->segs.back().next_file_offset()==(uint64_t)a_off){
+	if(ci->content_segs.back().next_file_offset()==(uint64_t)a_off){
 
 	    /* if both the last and the current are sparse, this can be extended. */
-	    if((ci->segs.back().flags & TSK_FS_BLOCK_FLAG_SPARSE) &&
+	    if((ci->content_segs.back().flags & TSK_FS_BLOCK_FLAG_SPARSE) &&
 	       (flags & TSK_FS_BLOCK_FLAG_SPARSE)){
 
-		ci->segs.back().len += size;
+		ci->content_segs.back().len += size;
 		return TSK_WALK_CONT;
 	    }
 
 
 	    /* If both are compressed, then this can be extended? */
-	    if((ci->segs.back().flags & TSK_FS_BLOCK_FLAG_COMP) &&
+	    if((ci->content_segs.back().flags & TSK_FS_BLOCK_FLAG_COMP) &&
 	       (flags & TSK_FS_BLOCK_FLAG_COMP) &&
-	       (ci->segs.back().img_offset + ci->segs.back().len == img_offset)){
-		ci->segs.back().len += size;
+	       (ci->content_segs.back().img_offset + ci->content_segs.back().len == img_offset)){
+		ci->content_segs.back().len += size;
 		return TSK_WALK_CONT;
 	    }
 
 	    /* See if we can extend the last segment in the segment list,
 	     * or if this is the start of a new fragment.
 	     */
-	    if((ci->segs.back().flags & TSK_FS_BLOCK_FLAG_RAW) &&
+	    if((ci->content_segs.back().flags & TSK_FS_BLOCK_FLAG_RAW) &&
 	       (flags & TSK_FS_BLOCK_FLAG_RAW) &&
-	       (ci->segs.back().img_offset + ci->segs.back().len == img_offset)){
-		ci->segs.back().len += size;
+	       (ci->content_segs.back().img_offset + ci->content_segs.back().len == img_offset)){
+		ci->content_segs.back().len += size;
 		return TSK_WALK_CONT;
 	    }
 	}
