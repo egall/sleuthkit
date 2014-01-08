@@ -76,6 +76,12 @@ public:
     std::string filename()     { return evidence_dirname + evidence_filename; }
     std::string filemagic();			// returns output of the 'file' command or libmagic
     void   add_seg(int64_t img_offset,int64_t fs_offset,int64_t file_offset,
+		   int64_t len, TSK_FS_BLOCK_FLAG_ENUM flags, seglist target_segs);
+    void   add_content_seg(int64_t img_offset,int64_t fs_offset,int64_t file_offset,
+		   int64_t len, TSK_FS_BLOCK_FLAG_ENUM flags);
+    void   add_name_seg(int64_t img_offset,int64_t fs_offset,int64_t file_offset,
+		   int64_t len, TSK_FS_BLOCK_FLAG_ENUM flags);
+    void   add_inode_seg(int64_t img_offset,int64_t fs_offset,int64_t file_offset,
 		   int64_t len, TSK_FS_BLOCK_FLAG_ENUM flags);
 
     void   add_bytes(const u_char *buf,uint64_t file_offset,ssize_t size);

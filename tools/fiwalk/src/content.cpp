@@ -315,7 +315,7 @@ bool content::need_file_walk()
 /** Called to create a new segment. */
 void content::add_seg(int64_t img_offset,int64_t fs_offset,
 		      int64_t file_offset,int64_t len,
-		      TSK_FS_BLOCK_FLAG_ENUM flags)
+		      TSK_FS_BLOCK_FLAG_ENUM flags, seglist target_segs)
 {
     struct seg newseg;
     newseg.img_offset = img_offset;
@@ -323,7 +323,26 @@ void content::add_seg(int64_t img_offset,int64_t fs_offset,
     newseg.file_offset = file_offset;
     newseg.len   = len;
     newseg.flags = flags;
-    this->content_segs.push_back(newseg);
+    target_segs.push_back(newseg);
+}
+
+void content::add_content_seg(int64_t img_offset,int64_t fs_offset,
+			      int64_t file_offset,int64_t len,
+			      TSK_FS_BLOCK_FLAG_ENUM flags)
+{
+    add_seg(img_offset, fs_offset, file_offset, len, flags, this->content_segs);
+}
+void content::add_name_seg(int64_t img_offset,int64_t fs_offset,
+			   int64_t file_offset,int64_t len,
+			   TSK_FS_BLOCK_FLAG_ENUM flags)
+{
+    add_seg(img_offset, fs_offset, file_offset, len, flags, this->name_segs);
+}
+void content::add_inode_seg(int64_t img_offset,int64_t fs_offset,
+			   int64_t file_offset,int64_t len,
+			   TSK_FS_BLOCK_FLAG_ENUM flags)
+{
+    add_seg(img_offset, fs_offset, file_offset, len, flags, this->inode_segs);
 }
 
 

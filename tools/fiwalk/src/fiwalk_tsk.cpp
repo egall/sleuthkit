@@ -135,7 +135,7 @@ file_act(TSK_FS_FILE * fs_file, TSK_OFF_T a_off, TSK_DADDR_T addr, char *buf,
 	}
     }
     /* Need to add a new element to the list */
-    ci->add_seg(img_offset,fs_offset,(int64_t)a_off,size,flags);
+    ci->add_content_seg(img_offset,fs_offset,(int64_t)a_off,size,flags);
     return TSK_WALK_CONT;
 }
 
@@ -556,7 +556,7 @@ void process_scalpel_audit_file(TSK_IMG_INFO *img_info,const char *audit_file)
 		    file_info("carvelength",length);
 		}
 
-		ci.add_seg(start,start,0,r2,TSK_FS_BLOCK_FLAG_RAW);	// may not be able to read it all
+		ci.add_content_seg(start,start,0,r2,TSK_FS_BLOCK_FLAG_RAW);	// may not be able to read it all
 		ci.add_bytes(buf2,0,r2);
 		ci.write_record();
 		free(buf2);
