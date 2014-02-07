@@ -2,6 +2,8 @@
 #include "../fs/tsk_fs_i.h"
 #include "../fs/tsk_xtaffs.h"
 
+#define XTAF_PART_LABEL_MAX_LENGTH 25
+
 static void
 xtaf_close(TSK_VS_INFO * vs)
 {
@@ -25,38 +27,41 @@ TSK_VS_INFO *
 tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 {
     TSK_VS_INFO *vs;
-//    TSK_VS_PART_INFO* part_0x80000;
-//    TSK_VS_PART_INFO* part_0x80080000;
-//    TSK_VS_PART_INFO* part_0x10C080000;
-//    TSK_VS_PART_INFO* part_0x118eb0000;
-    TSK_VS_PART_INFO* part_sys;
-//    TSK_VS_PART_INFO* part_data;
-//    TSK_VS_PART_INFO* all_parts[5] = {part_0x80000, part_0x80080000, part_0x10C080000, part_0x118eb0000, part_sys, part_data};
-    
     
     ssize_t cnt;
-    unsigned int len;
+    unsigned int xtafsb_len;
+    unsigned int sector_size;
     xtaffs_sb* xtafsb;
-    //EQS TODO: This may need to be malloc'ed.  AJN:  The label passed to tsk_vs_part_add must be malloc'ed.
-    char zeroth_part[] = "Partition0x80000";
-    char first_part[] = "Partition0x80080000";
-    char second_part[] = "Partition0x10C080000";
-    char third_part[] = "Partition0x118eb0000";
-    char sys_part[] = "System Partition";
-    char data_part[] = "Data Partition ";
-//    char part_names[5][] = {
-    TSK_DADDR_T offsets[] = {0x80000, 0x80080000, 0x10C080000, 0x118eb0000, 0x120eb0000, 0x130eb0000};
-//    TSK_DADDR_T part_offset[] = {1024, 4195328, 8782848, 9205120, 9467264, 9991552};
-//    TSK_DADDR_T part_size[] = {4194304, 4587520, 422272, 262144, 524288, 478405616};
+    /* Offsets and lengths (in sectors) are hard-coded, except for the user data partition length. */
+    TSK_DADDR_T known_xtaf_offsets[] = {1024   , 4195328, 8782848, 9205120, 9467264, 9991552};
+    TSK_DADDR_T known_xtaf_lengths[] = {4194304, 4587520, 422272 , 262144 , 524288 , 0};
+    /* Partition labels c/o the Free60 Wiki: http://free60.org/FATX */
+    char* known_xtaf_labels[] = {
+      "XTAF (System Cache)",
+      "XTAF (Game Cache)",
+      "XTAF (System Extended)",
+      "XTAF (System Extended 2)",
+      "XTAF (Compatibility)",
+      "XTAF (System)"
+    }; //AJN: Recall that the label passed to tsk_vs_part_add must be malloc'ed.
+    TSK_VS_PART_INFO* part;
+    TSK_DADDR_T partition_offset;
+    TSK_DADDR_T partition_length;
     int itor;
     char *part_label;
 
-    // clean up any errors that are lying around
+    /* Clean up any errors that are lying around. */
     tsk_error_reset();
 
 
-    len = sizeof(xtaffs_sb);
-    xtafsb = (xtaffs_sb *) tsk_malloc(len);
+    sector_size = img_info->sector_size;
+    if (0 == sector_size) {
+        tsk_fprintf(stderr, "tsk_vs_xtaf_open: img_info has the sector size of this image as 0 bytes.  Guessing 512 instead, but this should be fixed.\n");
+        sector_size = 512;
+    }
+
+    xtafsb_len = sizeof(xtaffs_sb);
+    xtafsb = (xtaffs_sb *) tsk_malloc(xtafsb_len);
     if (xtafsb == NULL) {
         return NULL;
     }
@@ -78,132 +83,87 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     vs->close = xtaf_close;
     vs->part_count = 0;
 
-    //look for XTAF sig, if it isn't there return NULL
-    for(itor = 0; itor <= 5; itor++){
-        /*  NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy */
-        cnt = tsk_img_read(img_info, offsets[itor], (char *) xtafsb, len);
-        if(strncmp((char*) xtafsb->magic, "XTAF", 4)){
-            tsk_fprintf(stderr, "Part %d not XTAF file system\n", itor);
-//            return NULL;
-            continue;
-        }    
-        if (itor == 0) {
-            continue; //EQS NOTE: This partition has a different structure so it is skipped over
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
-            part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 5, "XTAF");
+    /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
+    for (itor = 0; itor < 6; itor++) {
+        /* Reset. */
+        xtafsb = NULL;
+        part = NULL;
+        part_label = NULL;
 
-            TSK_VS_PART_INFO* part_0x80000;
-            part_0x80000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80000));
-            part_0x80000 = tsk_vs_part_add(vs, 1024, 4194304, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
-            if (NULL == part_0x80000) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add part %d\n", itor);
+        partition_offset = known_xtaf_offsets[itor];
+        partition_length = known_xtaf_lengths[itor];
+        if (0 == partition_length) {
+            if (tsk_verbose) {
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Computing partition length.\n");
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Image size: %" PRIuOFF " bytes.\n", img_info->size);
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Sector size: %u bytes.\n", img_info->sector_size);
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Partition offset: %" PRIuDADDR " bytes.\n", partition_offset * img_info->sector_size);
+            }
+
+            /* Compute partition length of the user data partition differently - based on input image's length. */
+            if ((img_info->size / sector_size) < partition_offset) {
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: This image is smaller than the offset of the target partition.  Aborting.\n");
                 return NULL;
             }
-        } else if (itor == 1) {
-            continue; //EQS NOTE: This partition has a different structure so it is skipped over
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
-            part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 5, "XTAF");
-
-            TSK_VS_PART_INFO* part_0x80080000;
-            part_0x80080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80080000));
-            part_0x80080000 = tsk_vs_part_add(vs, 4195328, 4587520, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
-            if (NULL == part_0x80080000) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add part %d\n", itor);
-                return NULL;
-            }
-        } else if (itor == 2) {
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
-            part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 5, "XTAF");
-
-            TSK_VS_PART_INFO* part_0x10C080000;
-            part_0x10C080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x10C080000));
-            part_0x10C080000 = tsk_vs_part_add(vs, 8782848, 422272, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
-            if (NULL == part_0x10C080000) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add part %d\n", itor);
-                return NULL;
-            }
-        } else if (itor == 3) {
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
-            part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 5, "XTAF");
-
-            TSK_VS_PART_INFO* part_0x118eb0000;
-            part_0x118eb0000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x118eb0000));
-            part_0x118eb0000 = tsk_vs_part_add(vs, 9205120, 262144, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
-            if (NULL == part_0x118eb0000) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add part %d\n", itor);
-                return NULL;
-            }
-        } else if (itor == 4) {
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
-            part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 5, "XTAF");
-
-            TSK_VS_PART_INFO* part_sys;
-            part_sys = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_sys));
-            part_sys = tsk_vs_part_add(vs, 9467264, 524288, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
-            if (NULL == part_sys) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add part %d\n", itor);
-                return NULL;
-            }
-        } else if(itor == 5) {
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Adding part %d to list\n", itor);
-            part_label = (char *) tsk_malloc(5 * sizeof(char));
-            snprintf(part_label, 5, "XTAF");
-
-            TSK_VS_PART_INFO* part_data;
-            part_data = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_data));
-            part_data = tsk_vs_part_add(vs, 9991552, 478405616, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
-            if (NULL == part_data) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add part %d\n", itor);
-                return NULL;
-            }
+            partition_length = (img_info->size / sector_size) - partition_offset;
         }
 
-/*
-        all_parts[itor] = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(TSK_VS_PART_INFO*));
-        printf("size = %"PRIu64" offset = %"PRIu64"\n", part_size[itor], part_offset[itor]);
-        all_parts[itor] = tsk_vs_part_add(vs, part_offset[itor], part_size[itor], 0x1, "part", 0, 0);
-*/
+        if (tsk_verbose) {
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Testing for partition.\n");
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open:   itor: %d.\n", itor);
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open:   offset: %" PRIuDADDR " sectors.\n", partition_offset);
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open:   length: %" PRIuDADDR " sectors.\n", partition_length);
+        }
+
+        /* Allocate superblock struct. */
+        xtafsb = (xtaffs_sb*) tsk_malloc(sizeof(*xtafsb));
+        if (NULL == xtafsb) {
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to allocate superblock for partition %d.\n", itor);
+            free(xtafsb);
+            continue;
+        }
+
+        /* Read in superblock. */
+        /* NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy. */
+        cnt = tsk_img_read(img_info, partition_offset * sector_size, (char *) xtafsb, xtafsb_len);
+        /* Check for a failed read. */
+        if (cnt != xtafsb_len) {
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to read at partition offset %" PRIuDADDR " bytes.\n", partition_offset * sector_size);
+            free(xtafsb);
+            continue;
+        }
+
+        /* Sanity test: Check the magic. */
+        if(strncmp((char*) xtafsb->magic, "XTAF", 4)){
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Partition %d at %" PRIuDADDR " bytes is not an XTAF file system.\n", itor, partition_offset * partition_offset);
+            free(xtafsb);
+            continue;
+        }
+
+        /* The partition at this point is sane. No further need to check the superblock. */
+        free(xtafsb);
+
+        /* Allocate partition struct. */
+        part = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part));
+        if (NULL == part) {
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to allocate partition %d.\n", itor);
+            continue;
+        }
+
+
+        part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
+        snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
+
+        /* Populate partition struct and append to partition list. */
+        part = tsk_vs_part_add(vs, partition_offset, partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
+        if (NULL == part) {
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add partition %d to partition list.\n", itor);
+            break;
+        }
     }
-    
-/*
-    part_0x80000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80000));
-    part_0x80080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x80080000));
-    part_0x10C080000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x10C080000));
-    part_0x118eb0000 = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_0x118eb0000));
-*/
-//    part_sys = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_sys));
-//    part_data = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part_data));
 
-
-/*
-    part_0x80000  = tsk_vs_part_add(vs, 1024, 4194304, 0x1, zeroth_part, 0, 0);
-    part_0x80080000  = tsk_vs_part_add(vs, 4195328, 4587520, 0x1, first_part, 0, 0);
-*/
-    
-//    part_0x10C080000  = tsk_vs_part_add(vs, 8782848, 422272, 0x1, second_part, 0, 0);
-//    part_0x118eb0000  = tsk_vs_part_add(vs, 9205120, 262144, 0x1, third_part, 0, 0);
-
-//    part_sys  = tsk_vs_part_add(vs, 9467264, 524288, 0x1, sys_part, 0, 0);
-//    part_data  = tsk_vs_part_add(vs, 9991552, 478405616, 0x1, data_part, 0, 0);
-
-    /* fill in the sorted list with the 'unknown' values */
+    /* Denote unallocated space as "Unused" disk area. */
     if (tsk_vs_part_unused(vs)) {
         xtaf_close(vs);
         return NULL;
