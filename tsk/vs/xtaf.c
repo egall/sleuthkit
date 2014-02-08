@@ -12,6 +12,53 @@ xtaf_close(TSK_VS_INFO * vs)
     free(vs);
 }
 
+/*
+ * Inspects a byte address for an XTAF superblock structure.
+ *
+ * @param offset Offset in sectors.
+ *
+ * Returns 0 on finding a sane-looking XTAF superblock.
+ * Returns 1 on finding non-XTAF-superblock data.
+ * Returns <0 on more basic errors (memory, I/O).
+ */
+int
+tsk_vs_xtaf_verifysb(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, unsigned int sector_size){
+    ssize_t cnt;
+    xtaffs_sb* xtafsb;
+    unsigned int xtafsb_len;
+
+    xtafsb_len = sizeof(xtaffs_sb);
+
+    /* Allocate superblock struct. */
+    xtafsb = (xtaffs_sb*) tsk_malloc(xtafsb_len);
+    if (NULL == xtafsb) {
+        tsk_fprintf(stderr, "tsk_vs_xtaf_verifysb: Failed to allocate superblock for partition %d.\n");
+        return -ENOMEM;
+    }
+
+    /* Read in superblock. */
+    /* NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy. */
+    cnt = tsk_img_read(img_info, offset * sector_size, (char *) xtafsb, xtafsb_len);
+    /* Check for a failed read. */
+    if (cnt != xtafsb_len) {
+        tsk_fprintf(stderr, "tsk_vs_xtaf_verifysb: Failed to read at disk offset %" PRIuDADDR " bytes.\n", offset * sector_size);
+        free(xtafsb);
+        return -EIO;
+    }
+
+    /* Sanity test: Check the magic. */
+    if(strncmp((char*) xtafsb->magic, "XTAF", 4)){
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_xtaf_verifysb: Partition at %" PRIuDADDR " bytes is not an XTAF file system.\n", offset * sector_size);
+        free(xtafsb);
+        return 1;
+    }
+
+    /* The partition at this point is sane. No further need to check the superblock. */
+    free(xtafsb);
+
+    return 0;
+}
 
 /* 
  * Given the path to the file, open it and load the internal
@@ -28,10 +75,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 {
     TSK_VS_INFO *vs;
     
-    ssize_t cnt;
-    unsigned int xtafsb_len;
     unsigned int sector_size;
-    xtaffs_sb* xtafsb;
     /* Offsets and lengths (in sectors) are hard-coded, except for the user data partition length. */
     TSK_DADDR_T known_xtaf_offsets[] = {1024   , 4195328, 8782848, 9205120, 9467264, 9991552};
     TSK_DADDR_T known_xtaf_lengths[] = {4194304, 4587520, 422272 , 262144 , 524288 , 0};
@@ -49,6 +93,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     TSK_DADDR_T partition_length;
     int itor;
     char *part_label;
+    int rc_verifysb;
     int partition_tally = 0;
 
     /* Clean up any errors that are lying around. */
@@ -58,12 +103,6 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     if (0 == sector_size) {
         tsk_fprintf(stderr, "tsk_vs_xtaf_open: img_info has the sector size of this image as 0 bytes.  Guessing 512 instead, but this should be fixed.\n");
         sector_size = 512;
-    }
-
-    xtafsb_len = sizeof(xtaffs_sb);
-    xtafsb = (xtaffs_sb *) tsk_malloc(xtafsb_len);
-    if (xtafsb == NULL) {
-        return NULL;
     }
 
     vs = (TSK_VS_INFO *) tsk_malloc(sizeof(*vs));
@@ -84,10 +123,18 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     vs->close = xtaf_close;
     vs->part_count = 0;
 
+    /* Inspect beginning of image for XTAF superblock.  If one is present there, assume we're looking at a partition image, and quit early. */
+    rc_verifysb = tsk_vs_xtaf_verifysb(img_info, 0, sector_size);
+    if (rc_verifysb == 0) {
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Encountered XTAF superblock at beginning of image.  Assuming this is a partition image, not a disk image.\n");
+        xtaf_close(vs);
+        return NULL;
+    }
+
     /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
     for (itor = 0; itor < 6; itor++) {
         /* Reset. */
-        xtafsb = NULL;
         part = NULL;
         part_label = NULL;
 
@@ -118,33 +165,11 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             tsk_fprintf(stderr, "tsk_vs_xtaf_open:   length: %" PRIuDADDR " sectors.\n", partition_length);
         }
 
-        /* Allocate superblock struct. */
-        xtafsb = (xtaffs_sb*) tsk_malloc(sizeof(*xtafsb));
-        if (NULL == xtafsb) {
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to allocate superblock for partition %d.\n", itor);
+        /* Check for XTAF superblock. */
+        rc_verifysb = tsk_vs_xtaf_verifysb(img_info, partition_offset, sector_size);
+        if (rc_verifysb != 0) {
             continue;
         }
-
-        /* Read in superblock. */
-        /* NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy. */
-        cnt = tsk_img_read(img_info, partition_offset * sector_size, (char *) xtafsb, xtafsb_len);
-        /* Check for a failed read. */
-        if (cnt != xtafsb_len) {
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to read at partition offset %" PRIuDADDR " bytes.\n", partition_offset * sector_size);
-            free(xtafsb);
-            continue;
-        }
-
-        /* Sanity test: Check the magic. */
-        if(strncmp((char*) xtafsb->magic, "XTAF", 4)){
-            if (tsk_verbose)
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Partition %d at %" PRIuDADDR " bytes is not an XTAF file system.\n", itor, partition_offset * partition_offset);
-            free(xtafsb);
-            continue;
-        }
-
-        /* The partition at this point is sane. No further need to check the superblock. */
-        free(xtafsb);
 
         /* Allocate partition struct. */
         part = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part));
