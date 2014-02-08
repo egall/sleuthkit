@@ -122,7 +122,6 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         xtafsb = (xtaffs_sb*) tsk_malloc(sizeof(*xtafsb));
         if (NULL == xtafsb) {
             tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to allocate superblock for partition %d.\n", itor);
-            free(xtafsb);
             continue;
         }
 
