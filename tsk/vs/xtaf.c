@@ -49,10 +49,10 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     TSK_DADDR_T partition_length;
     int itor;
     char *part_label;
+    int partition_tally = 0;
 
     /* Clean up any errors that are lying around. */
     tsk_error_reset();
-
 
     sector_size = img_info->sector_size;
     if (0 == sector_size) {
@@ -65,6 +65,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     if (xtafsb == NULL) {
         return NULL;
     }
+
     vs = (TSK_VS_INFO *) tsk_malloc(sizeof(*vs));
     if (vs == NULL)
         return NULL;
@@ -102,7 +103,9 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 
             /* Compute partition length of the user data partition differently - based on input image's length. */
             if ((img_info->size / sector_size) < partition_offset) {
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: This image is smaller than the offset of the target partition.  Aborting.\n");
+                if (tsk_verbose)
+                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: This image is smaller than the offset of the target partition.  Aborting.\n");
+                xtaf_close(vs);
                 return NULL;
             }
             partition_length = (img_info->size / sector_size) - partition_offset;
@@ -151,7 +154,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             continue;
         }
 
-
+        /* Allocate partition label. */
         part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
         snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
 
@@ -161,6 +164,14 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add partition %d to partition list.\n", itor);
             break;
         }
+
+        partition_tally++;
+    }
+
+    /* Don't call this an XTAF volume system if none of the hard-coded partitions were found. */
+    if (partition_tally == 0) {
+        xtaf_close(vs);
+        return NULL;
     }
 
     /* Denote unallocated space as "Unused" disk area. */
