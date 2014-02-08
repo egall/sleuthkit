@@ -171,13 +171,6 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             continue;
         }
 
-        /* Allocate partition struct. */
-        part = (TSK_VS_PART_INFO*) tsk_malloc(sizeof(*part));
-        if (NULL == part) {
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to allocate partition %d.\n", itor);
-            continue;
-        }
-
         /* Allocate partition label. */
         part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
         snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
