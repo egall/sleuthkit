@@ -1219,7 +1219,7 @@ xtaffs_close(TSK_FS_INFO * fs)
 
 /**
  * \internal
- * Open part of a disk image as a FAT file system. 
+ * Open part of a disk image as a XTAF file system. 
  *
  * @param img_info Disk image to analyze
  * @param offset Byte offset where FAT file system starts
@@ -1242,6 +1242,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     int i;
     uint8_t used_backup_boot = 0;       // set to 1 if we used the backup boot sector
     int is_xtaf = 0;
+    TSK_OFF_T partition_size;
 
     // clean up any error messages that are lying around
     tsk_error_reset();
@@ -1402,7 +1403,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     */
 
 
-    /*AJN TODO BUG: img_info->size is an incorect proxy for the partition size.*/
+    /*AJN TODO BUG: img_info->size is an incorrect proxy for the partition size.*/
     if(img_info->size == 146413464 || img_info->size == 4712496640 || img_info->size == 4846714880){
 //        printf("Partition 1\n"); //AJN TODO These should be debug prints
         xtaffs->rootsect = 1176; //AJN TODO Can we calculate these instead?
@@ -1411,7 +1412,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
         xtaffs->lastclust = (TSK_DADDR_T) 147891;
     }else if(img_info->size == 2147483648 || offset == 0x80000){
-        printf("Partition 0x80000\n");
+//        printf("Partition 0x80000\n");
         xtaffs->rootsect = 528;
         xtaffs->sectperfat = (uint32_t) 512;
         xtaffs->firstclustsect = (TSK_DADDR_T) 592;
@@ -1449,9 +1450,24 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = (TSK_DADDR_T) 112;
         xtaffs->clustcnt = (TSK_DADDR_T) 16384;
         xtaffs->lastclust = (TSK_DADDR_T) 16381;
-    }else if(img_info->size == 244943674880 || offset == 0x130eb0000){
+    }else if(img_info->size > 5115150336 || offset == 0x130eb0000){
+        /* 5115150336 is the number of bytes of all the first five partitions combined.  An image larger than that would be of a disk, or of the user data partition. */
 //        printf("Data Partition\n");
-        xtaffs->rootsect = 116808; /*AJN TODO This will probably fail on a non-250GB disk*/
+
+        /*
+         * Compute size of partition.
+         * Heuristic for determining if we're working with a partition image or disk image:
+         *
+         *    offset == 0x130eb0000 -> disk image
+         *
+         * That's it.
+         */
+        if (offset == 0x130eb0000) {
+            partition_size = img_info->size - offset;
+        } else {
+            partition_size = img_info->size;
+        }
+        xtaffs->rootsect = 116808; /*AJN TODO This fails on a non-250GB disk*/
         xtaffs->sectperfat = (uint32_t) 116800;
         xtaffs->firstclustsect = (TSK_DADDR_T) 116840;
         xtaffs->firstdatasect = xtaffs->firstclustsect;
