@@ -14,6 +14,8 @@
 //extern void errx(int eval, const char *fmt, ...);
 //#endif
 
+enum byteRunsFacet {DATA, INODE, NAME};
+
 /* Structure for keeping track of file segments */
 class seg {
 public:;
@@ -80,7 +82,8 @@ public:
     void   add_bytes(const char *buf,uint64_t file_offset,ssize_t size){ // handle annoying sign problems
 	add_bytes((const u_char *)buf,file_offset,size); 
     }
-    void write_record();		// writes the ARFF record for this content
+    //void write_record();		// writes the ARFF record for this content
+    void write_record(byteRunsFacet facet= DATA);
 };
 
 #endif

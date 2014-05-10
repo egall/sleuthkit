@@ -237,6 +237,7 @@ process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
      */
 
     /* fs_file->name */
+    //TODO investigate here?
 
     if(ci.has_filename()) file_info("filename",validateOrEscapeUTF8(ci.filename()));
     file_info("partition",current_partition_num);
