@@ -350,8 +350,16 @@ process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
     dummyCi.segs.front() = dummySeg;
     printf("end dummy\n");
 
-    dummyCi.write_record(NAME);
-    dummyCi.write_record(INODE);
+    /* Write the meta byte_runs facet if the meta struct is populated */
+    if(fs_file->meta != NULL)
+    {
+        dummyCi.write_record(INODE);
+    }
+    /* Write the name (directory entry) byte_runs facet if the name struct is populated */
+    if(fs_file->name != NULL)
+    {
+        dummyCi.write_record(NAME);
+    }
     ci.write_record();
 
 
