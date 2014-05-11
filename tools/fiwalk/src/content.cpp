@@ -267,6 +267,7 @@ string content::filemagic()
 void content::write_record()
 {
     this->write_record(DATA);
+    //TOvlad test
 }
 */
 
@@ -277,9 +278,11 @@ void content::write_record(byteRunsFacet facet )
         file_info("libmagic", validateOrEscapeUTF8(this->filemagic()));
     }
 
+    printf("\nIn write_record\n");
     //NOTE byte_run write occurs here
     if (this->segs.size() > 0)
     {
+        printf("\tsegment size>0\n");
         string runs = "";
         for (seglist::const_iterator i = this->segs.begin(); i != this->segs.end(); i++)
         { // testing
@@ -338,7 +341,7 @@ void content::write_record(byteRunsFacet facet )
                 file_info_xml("byte_runs","facet=\"name\"", runs);
                 break;
             default:
-                file_info_xml("byte_runs", runs);
+                file_info_xml("bytessdf_runs", runs);
         }
 
 
@@ -369,6 +372,7 @@ void content::write_record(byteRunsFacet facet )
             }
         }
     }
+    printf("exit write_record\n");
 }
 
 /* Do we need full content? */

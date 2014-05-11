@@ -146,6 +146,8 @@ file_act(TSK_FS_FILE * fs_file, TSK_OFF_T a_off, TSK_DADDR_T addr, char *buf,
 static uint8_t
 process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
 {
+    //TOVLAD the info and whatnot will come here, where we process the file
+
     /* Make sure that the SleuthKit structures are properly set */
     if (fs_file->name == NULL) 
         return 1;
@@ -327,7 +329,33 @@ process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
     	file_info("link_target",fs_file->meta->link);
         }
     }
+    int i=0;
+    //TOVLAD dummy way to add more byteruns
+    printf("debug index: %d\n",i++);
+    printf("start dummy\n");
+    content dummyCi (fs_file->fs_info->img_info);   // where the content will go
+    dummyCi.evidence_dirname = path;
+    dummyCi.set_filename(fs_file->name->name);
+    dummyCi.segs = seglist(1);
+    printf("dummy seg\n");
+    printf("debug index: %d\n",i++);
+    seg dummySeg = seg();
+    dummySeg.file_offset = 0;
+    printf("debug index: %d\n",i++);
+    dummySeg.fs_offset = 0;
+    printf("debug index: %d\n",i++);
+    dummySeg.len = 0;
+    dummySeg.img_offset = 0;
+    printf("debug index: %d\n",i++);
+    dummyCi.segs.front() = dummySeg;
+    printf("end dummy\n");
+
+    dummyCi.write_record(NAME);
+    dummyCi.write_record(INODE);
     ci.write_record();
+
+
+
 
 
     /* Processing for regular files: */
