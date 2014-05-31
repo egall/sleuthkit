@@ -308,7 +308,7 @@ static TSK_RETVAL_ENUM
                 a = 0;
 
                 for (b = 0; b < 42; b++) {
-                    if(dir->name[b] < 33 || dir->name[b] > 126) break;
+                    if(dir->name[b] < 32 || dir->name[b] > 126) break;
                     if ((dir->name[b] >= 0x20) && (dir->name[b] != 0xff)) {
                         fs_name->name[a++] = dir->name[b];
                     }
@@ -335,13 +335,11 @@ static TSK_RETVAL_ENUM
                     fs_name->shrt_name[0] = '\0';
                     name_ptr = fs_name->name;   // put 8.3 into normal location
 
-                /* copy in the short name into the place specified above. 
-                * Skip spaces and put in the . */
+                /* copy in the short name into the place specified above. */
                 a = 0;
                 for (b = 0; b < 42; b++) {
-                    if(dir->name[b] < 33 || dir->name[b] > 126) break;
-                    if ((dir->name[b] != 0) && (dir->name[b] != 0xff) &&
-                        (dir->name[b] != 0x20)) {
+                    if(dir->name[b] < 32 || dir->name[b] > 126) break;
+                    if ((dir->name[b] != 0) && (dir->name[b] != 0xff)) {
 
                             if ((b == 0)
                                 && (dir->name[0] == XTAFFS_SLOT_DELETED)) {

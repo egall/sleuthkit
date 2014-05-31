@@ -304,7 +304,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
 
         i = 0;
         for (a = 0; a < 42; a++) {
-            if(in->name[i] < 33 || in->name[i] > 126) break;
+            if(in->name[i] < 32 || in->name[i] > 126) break;
             if ((in->name[a] != 0x00) && (in->name[a] != 0xff))
                 fs_meta->name2->name[i++] = in->name[a];
         }
@@ -322,7 +322,7 @@ xtaffs_dinode_copy(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta,
     else {
         for (i = 0; (i < 42) && (in->name[i] != 0) && (in->name[i] != ' ');
             i++) {
-            if(in->name[i] < 33 || in->name[i] > 126) break;
+            if(in->name[i] < 32 || in->name[i] > 126) break;
             if ((i == 0) && (in->name[0] == XTAFFS_SLOT_DELETED))
                 fs_meta->name2->name[0] = '_';
             else
