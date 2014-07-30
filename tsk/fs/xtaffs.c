@@ -1411,45 +1411,64 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = 1240;
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
         xtaffs->lastclust = (TSK_DADDR_T) 147891;
+//        fs->last_inum = 7673128;
+        sectors = (TSK_DADDR_T) (4194304)/XTAF_SECTOR_SIZE;
     }else if(img_info->size == 2147483648 || offset == 0x80000){
 //        printf("Partition 0x80000\n");
         xtaffs->rootsect = 528;
         xtaffs->sectperfat = (uint32_t) 512;
         xtaffs->firstclustsect = (TSK_DADDR_T) 592;
-        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
-        xtaffs->lastclust = (TSK_DADDR_T) 65527;
+//        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
+//        xtaffs->lastclust = (TSK_DADDR_T) 65527;
+        xtaffs->clustcnt = (TSK_DADDR_T) 131071;
+        xtaffs->lastclust = (TSK_DADDR_T) 131072;
+        fs->last_inum = 7673128;
+        sectors = (4194304);
 
     }else if(img_info->size == 2348810240 || offset == 0x80080000){
 //        printf("Partition 0x80080000\n");
         xtaffs->rootsect = 2248;
         xtaffs->sectperfat = (uint32_t) 2240;
         xtaffs->firstclustsect = (TSK_DADDR_T) 2264;
-        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
-        xtaffs->lastclust = (TSK_DADDR_T) 65527;
+        xtaffs->clustcnt = (TSK_DADDR_T) 143359;
+        xtaffs->lastclust = (TSK_DADDR_T) 143360;
+//        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
+//        xtaffs->lastclust = (TSK_DADDR_T) 65527;
+//        fs->last_inum = 7673128;
+        sectors = (4587520);
 
     }else if(img_info->size == 216203264 || offset == 0x10C080000){
 //        printf("Partition 0x10C080000\n");
         xtaffs->rootsect = 64;
         xtaffs->sectperfat = (uint32_t) 56;
         xtaffs->firstclustsect = (TSK_DADDR_T) 96;
-        xtaffs->clustcnt = (TSK_DADDR_T) 13196;
-        xtaffs->lastclust = (TSK_DADDR_T) 13194;
+//        xtaffs->clustcnt = (TSK_DADDR_T) 13196;
+//        xtaffs->lastclust = (TSK_DADDR_T) 13194;
+        xtaffs->clustcnt = (TSK_DADDR_T) 13191;
+        xtaffs->lastclust = (TSK_DADDR_T) 13192;
+        sectors = (422272);
 
     }else if(img_info->size == 134217728 || offset == 0x118eb0000){
 //        printf("Partition 0x118eb0000\n");
         xtaffs->rootsect = 48;
         xtaffs->sectperfat = (uint32_t) 40;
         xtaffs->firstclustsect = (TSK_DADDR_T) 80;
-        xtaffs->clustcnt = (TSK_DADDR_T) 8192;
-        xtaffs->lastclust = (TSK_DADDR_T) 8190;
+//        xtaffs->clustcnt = (TSK_DADDR_T) 8192;
+//        xtaffs->lastclust = (TSK_DADDR_T) 8190;
+        xtaffs->clustcnt = (TSK_DADDR_T) 8191;
+        xtaffs->lastclust = (TSK_DADDR_T) 8192;
+        sectors = (262144);
    
     }else if(img_info->size == 268435456 || offset == 0x120eb0000){
 //        printf("System partition\n");
         xtaffs->rootsect = 80;
         xtaffs->sectperfat = (uint32_t) 64;
         xtaffs->firstclustsect = (TSK_DADDR_T) 112;
-        xtaffs->clustcnt = (TSK_DADDR_T) 16384;
-        xtaffs->lastclust = (TSK_DADDR_T) 16381;
+//        xtaffs->clustcnt = (TSK_DADDR_T) 16384;
+//        xtaffs->lastclust = (TSK_DADDR_T) 16381;
+        xtaffs->clustcnt = (TSK_DADDR_T) 7008;
+        xtaffs->lastclust = (TSK_DADDR_T) 7009;
+        sectors = (224288);
     }else if(img_info->size > 5115150336 || offset == 0x130eb0000){
         /* 5115150336 is the number of bytes of all the first five partitions combined.  An image larger than that would be of a disk, or of the user data partition. */
 //        printf("Data Partition\n");
@@ -1473,6 +1492,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstdatasect = xtaffs->firstclustsect;
         xtaffs->clustcnt = (TSK_DADDR_T) 14950175;
         xtaffs->lastclust = (TSK_DADDR_T) 14946525;
+        sectors = (0)/XTAF_SECTOR_SIZE;
     }
     else{
         free(fatsb);
@@ -1728,7 +1748,7 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
     fs->last_block = fs->last_block_act = fs->block_count - 1;
     fs->block_size = xtaffs->ssize;
 
-    // determine the last block we have in this image
+    /* determine the last block we have in this image */
     if ((TSK_DADDR_T) ((img_info->size - offset) / fs->block_size) <
         fs->block_count)
         fs->last_block_act =
@@ -1748,6 +1768,8 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
     fs->last_inum =
         (XTAFFS_SECT_2_INODE(xtaffs,
             fs->last_block_act + 1) - 1) + XTAFFS_NUM_SPECFILE;
+
+    fs->last_inum = fs->last_inum;
     fs->inum_count = fs->last_inum - fs->first_inum + 1;
 
 
