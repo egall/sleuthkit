@@ -1389,7 +1389,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     xtaffs->numroot = (uint16_t) 1; /*AJN TODO Why did we hard-code this?*/
 
 
-    sectors = (TSK_DADDR_T) img_info->size/XTAF_SECTOR_SIZE;
+    /* EQS NOTE: This can be taken out after issue #21 is verified as fixed */
+//    sectors = (TSK_DADDR_T) img_info->size/XTAF_SECTOR_SIZE;
 
     /* EQS NOTE: sectperfat is hardcoded for the second partition.
                  I found this with hexedit:
@@ -1412,7 +1413,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
         xtaffs->lastclust = (TSK_DADDR_T) 147891;
 //        fs->last_inum = 7673128;
-        sectors = (TSK_DADDR_T) (4194304)/XTAF_SECTOR_SIZE;
+        sectors = (TSK_DADDR_T) (4194304);
     }else if(img_info->size == 2147483648 || offset == 0x80000){
 //        printf("Partition 0x80000\n");
         xtaffs->rootsect = 528;
