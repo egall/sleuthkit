@@ -74,6 +74,9 @@ TSK_VS_INFO *
 tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 {
     TSK_VS_INFO *vs;
+    ssize_t cnt;
+    char* xtaf_buffer[4];
+    int num_parts = 0;
     
     unsigned int sector_size;
     /* Offsets and lengths (in sectors) are hard-coded, except for the user data partition length. */
@@ -95,9 +98,13 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     char *part_label;
     int rc_verifysb;
     int partition_tally = 0;
+    int partition_scan = 0;
 
     /* Clean up any errors that are lying around. */
     tsk_error_reset();
+
+    /* Zero out buffer before reading */
+    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
 
     sector_size = img_info->sector_size;
     if (0 == sector_size) {
@@ -131,6 +138,42 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         xtaf_close(vs);
         return NULL;
     }
+    cnt = tsk_img_read(img_info, 0x80000, (char *) xtaf_buffer, 4);
+    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+        partition_scan++;
+        printf("Number of partitions = %d\n", partition_scan);
+    }
+    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+    cnt = tsk_img_read(img_info, 0x80080000, (char *) xtaf_buffer, 4);
+    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+        partition_scan++;
+        printf("Number of partitions = %d\n", partition_scan);
+    }
+    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+    cnt = tsk_img_read(img_info, 0x10C080000, (char *) xtaf_buffer, 4);
+    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+        partition_scan++;
+        printf("Number of partitions = %d\n", partition_scan);
+    }
+    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+    cnt = tsk_img_read(img_info, 0x118EB0000, (char *) xtaf_buffer, 4);
+    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+        partition_scan++;
+        printf("Number of partitions = %d\n", partition_scan);
+    }
+    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+    cnt = tsk_img_read(img_info, 0x120eb0000, (char *) xtaf_buffer, 4);
+    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+        partition_scan++;
+        printf("Number of partitions = %d\n", partition_scan);
+    }
+    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+    cnt = tsk_img_read(img_info, 0x130eb0000, (char *) xtaf_buffer, 4);
+    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+        partition_scan++;
+        printf("Number of partitions = %d\n", partition_scan);
+    }
+    printf("Total partitions counted %d ^^\n", partition_scan);
 
     /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
     for (itor = 0; itor < 6; itor++) {
