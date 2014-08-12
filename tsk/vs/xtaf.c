@@ -80,7 +80,8 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     
     unsigned int sector_size;
     /* Offsets and lengths (in sectors) are hard-coded, except for the user data partition length. */
-    TSK_DADDR_T known_xtaf_offsets[] = {1024   , 4195328, 8782848, 9205120, 9467264, 9991552};
+//    TSK_DADDR_T known_xtaf_offsets[] = {1024   , 4195328, 8782848, 9205120, 9467264, 9991552};
+    TSK_DADDR_T known_xtaf_offsets[] = {0x80000, 0x80080000, 0x10C080000, 0x118EB0000, 0x120eb0000, 0x130eb0000};
     TSK_DADDR_T known_xtaf_lengths[] = {4194304, 4587520, 422272 , 262144 , 524288 , 0};
     /* Partition labels c/o the Free60 Wiki: http://free60.org/FATX */
     char* known_xtaf_labels[] = {
@@ -138,6 +139,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         xtaf_close(vs);
         return NULL;
     }
+/*
     cnt = tsk_img_read(img_info, 0x80000, (char *) xtaf_buffer, 4);
     if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
         partition_scan++;
@@ -174,6 +176,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         printf("Number of partitions = %d\n", partition_scan);
     }
     printf("Total partitions counted %d ^^\n", partition_scan);
+*/
 
     /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
     for (itor = 0; itor < 6; itor++) {
@@ -182,7 +185,15 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         part_label = NULL;
 
         partition_offset = known_xtaf_offsets[itor];
+        memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+        cnt = tsk_img_read(img_info, partition_offset, (char *) xtaf_buffer, 4);
+        if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
+            partition_scan++;
+            printf("partition = %x\nNumber of partitions = %d\n", partition_offset, partition_scan);
+        }
+
         partition_length = known_xtaf_lengths[itor];
+        
         if (0 == partition_length) {
             if (tsk_verbose) {
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Computing partition length.\n");
