@@ -193,6 +193,11 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 
         partition_length = known_xtaf_lengths[itor];
         
+        if( partition_offset == 0x130eb0000){
+            partition_length = img_info->size - 0x130eb0000;
+            printf("Size of 6th partition = %"PRIu64"\n", partition_length);
+        }
+
         if (0 == partition_length) {
             if (tsk_verbose) {
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Computing partition length.\n");
