@@ -74,9 +74,8 @@ TSK_VS_INFO *
 tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
 {
     TSK_VS_INFO *vs;
-    ssize_t cnt;
+    ssize_t cnt = 0;
     char* xtaf_buffer[4];
-    int num_parts = 0;
     
     unsigned int sector_size;
     /* Offsets and lengths (in sectors) are hard-coded, except for the user data partition length. */
@@ -99,7 +98,6 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     char *part_label;
     int rc_verifysb;
     int partition_tally = 0;
-    int partition_scan = 0;
 
     /* Clean up any errors that are lying around. */
     tsk_error_reset();
@@ -139,108 +137,102 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         xtaf_close(vs);
         return NULL;
     }
-/*
-    cnt = tsk_img_read(img_info, 0x80000, (char *) xtaf_buffer, 4);
-    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-        partition_scan++;
-        printf("Number of partitions = %d\n", partition_scan);
-    }
+
+    /* check to see if image is a single partition, in which case XTAF would start at the beginning */
     memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
-    cnt = tsk_img_read(img_info, 0x80080000, (char *) xtaf_buffer, 4);
+    cnt = tsk_img_read(img_info, 0x0, (char *) xtaf_buffer, 4);
     if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-        partition_scan++;
-        printf("Number of partitions = %d\n", partition_scan);
-    }
-    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
-    cnt = tsk_img_read(img_info, 0x10C080000, (char *) xtaf_buffer, 4);
-    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-        partition_scan++;
-        printf("Number of partitions = %d\n", partition_scan);
-    }
-    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
-    cnt = tsk_img_read(img_info, 0x118EB0000, (char *) xtaf_buffer, 4);
-    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-        partition_scan++;
-        printf("Number of partitions = %d\n", partition_scan);
-    }
-    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
-    cnt = tsk_img_read(img_info, 0x120eb0000, (char *) xtaf_buffer, 4);
-    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-        partition_scan++;
-        printf("Number of partitions = %d\n", partition_scan);
-    }
-    memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
-    cnt = tsk_img_read(img_info, 0x130eb0000, (char *) xtaf_buffer, 4);
-    if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-        partition_scan++;
-        printf("Number of partitions = %d\n", partition_scan);
-    }
-    printf("Total partitions counted %d ^^\n", partition_scan);
-*/
-
-    /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
-    for (itor = 0; itor < 6; itor++) {
-        /* Reset. */
-        part = NULL;
-        part_label = NULL;
-
-        partition_offset = known_xtaf_offsets[itor];
-        memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
-        cnt = tsk_img_read(img_info, partition_offset, (char *) xtaf_buffer, 4);
-        if(strncmp(xtaf_buffer, "XTAF", 4) != 0){
-            continue;
-        }
-
-        partition_length = known_xtaf_lengths[itor];
-        
-        if( partition_offset == 0x130eb0000){
-            partition_length = img_info->size - 0x130eb0000;
-            printf("Size of 6th partition = %"PRIu64"\n", partition_length);
-        }
-
-        if (0 == partition_length) {
-            if (tsk_verbose) {
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Computing partition length.\n");
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Image size: %" PRIuOFF " bytes.\n", img_info->size);
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Sector size: %u bytes.\n", img_info->sector_size);
-                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Partition offset: %" PRIuDADDR " bytes.\n", partition_offset * img_info->sector_size);
-            }
-
-            /* Compute partition length of the user data partition differently - based on input image's length. */
-            if ((img_info->size / sector_size) < partition_offset) {
-                if (tsk_verbose)
-                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: This image is smaller than the offset of the target partition.  Aborting.\n");
-                xtaf_close(vs);
-                return NULL;
-            }
-            partition_length = (img_info->size / sector_size) - partition_offset;
-        }
-
-        if (tsk_verbose) {
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open: Testing for partition.\n");
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open:   itor: %d.\n", itor);
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open:   offset: %" PRIuDADDR " sectors.\n", partition_offset);
-            tsk_fprintf(stderr, "tsk_vs_xtaf_open:   length: %" PRIuDADDR " sectors.\n", partition_length);
-        }
-
-        /* Check for XTAF superblock. */
+        partition_offset = 0;
+        partition_length = img_info->size;
         rc_verifysb = tsk_vs_xtaf_verifysb(img_info, partition_offset, sector_size);
+        /* Check for XTAF superblock. */
         if (rc_verifysb != 0) {
-            continue;
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "Superblock incorrect\n");
+            xtaf_close(vs);
+            return NULL;
         }
-
         /* Allocate partition label. */
         part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
-        snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
+        snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, "unknown");
 
         /* Populate partition struct and append to partition list. */
         part = tsk_vs_part_add(vs, partition_offset, partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
         if (NULL == part) {
             tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add partition %d to partition list.\n", itor);
-            break;
+            xtaf_close(vs);
+            return NULL;
         }
+        partition_tally = 1;
+    }else{
 
-        partition_tally++;
+
+        /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
+        for (itor = 0; itor < 6; itor++) {
+            /* Reset. */
+            part = NULL;
+            part_label = NULL;
+    
+            partition_offset = known_xtaf_offsets[itor];
+    
+            /* Check to see if XTAF is at the location it should be */
+            memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
+            cnt = tsk_img_read(img_info, partition_offset, (char *) xtaf_buffer, 4);
+            if(strncmp(xtaf_buffer, "XTAF", 4) != 0){
+                continue;
+            }
+    
+            partition_length = known_xtaf_lengths[itor];
+            /* Last partition will have variable size depending on the size of drive, this partition will run to the end of the drive */       
+            if( partition_offset == 0x130eb0000){
+                partition_length = img_info->size - 0x130eb0000;
+                printf("Size of 6th partition = %"PRIu64"\n", partition_length);
+            }
+    
+            if (0 == partition_length) {
+                if (tsk_verbose) {
+                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Computing partition length.\n");
+                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Image size: %" PRIuOFF " bytes.\n", img_info->size);
+                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Sector size: %u bytes.\n", img_info->sector_size);
+                    tsk_fprintf(stderr, "tsk_vs_xtaf_open: Partition offset: %" PRIuDADDR " bytes.\n", partition_offset * img_info->sector_size);
+                }
+    
+                /* Compute partition length of the user data partition differently - based on input image's length. */
+                if ((img_info->size / sector_size) < partition_offset) {
+                    if (tsk_verbose)
+                        tsk_fprintf(stderr, "tsk_vs_xtaf_open: This image is smaller than the offset of the target partition.  Aborting.\n");
+                    xtaf_close(vs);
+                    return NULL;
+                }
+                partition_length = (img_info->size / sector_size) - partition_offset;
+            }
+    
+            if (tsk_verbose) {
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Testing for partition.\n");
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open:   itor: %d.\n", itor);
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open:   offset: %" PRIuDADDR " sectors.\n", partition_offset);
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open:   length: %" PRIuDADDR " sectors.\n", partition_length);
+            }
+    
+            /* Check for XTAF superblock. */
+            rc_verifysb = tsk_vs_xtaf_verifysb(img_info, partition_offset, sector_size);
+            if (rc_verifysb != 0) {
+                continue;
+            }
+    
+            /* Allocate partition label. */
+            part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
+            snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
+    
+            /* Populate partition struct and append to partition list. */
+            part = tsk_vs_part_add(vs, partition_offset, partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
+            if (NULL == part) {
+                tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add partition %d to partition list.\n", itor);
+                break;
+            }
+    
+            partition_tally++;
+        }
     }
 
     /* Don't call this an XTAF volume system if none of the hard-coded partitions were found. */
