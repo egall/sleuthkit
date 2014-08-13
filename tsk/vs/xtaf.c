@@ -78,9 +78,10 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     char* xtaf_buffer[4];
     
     unsigned int sector_size;
-    /* Offsets and lengths (in sectors) are hard-coded, except for the user data partition length. */
-//    TSK_DADDR_T known_xtaf_offsets[] = {1024   , 4195328, 8782848, 9205120, 9467264, 9991552};
+    /* Offsets and lengths are hard-coded, except for the user data partition length. */
+    /* Offsets are in bytes */
     TSK_DADDR_T known_xtaf_offsets[] = {0x80000, 0x80080000, 0x10C080000, 0x118EB0000, 0x120eb0000, 0x130eb0000};
+    /* Lengths are in sectors */
     TSK_DADDR_T known_xtaf_lengths[] = {4194304, 4587520, 422272 , 262144 , 524288 , 0};
     /* Partition labels c/o the Free60 Wiki: http://free60.org/FATX */
     char* known_xtaf_labels[] = {
@@ -154,7 +155,14 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         }
         /* Allocate partition label. */
         part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
-        snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, "unknown");
+        for (itor = 0; itor < 6; itor++){
+            if( (img_info->size/img_info->sector_size) == known_xtaf_lengths[itor]){
+                /* Allocate partition label. */
+                part_label = (char *) tsk_malloc(XTAF_PART_LABEL_MAX_LENGTH * sizeof(char));
+                snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
+                break;
+            }
+        }
 
         /* Populate partition struct and append to partition list. */
         part = tsk_vs_part_add(vs, partition_offset, partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
