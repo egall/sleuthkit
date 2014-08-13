@@ -187,9 +187,8 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         partition_offset = known_xtaf_offsets[itor];
         memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
         cnt = tsk_img_read(img_info, partition_offset, (char *) xtaf_buffer, 4);
-        if(strncmp(xtaf_buffer, "XTAF", 4) == 0){
-            partition_scan++;
-            printf("partition = %x\nNumber of partitions = %d\n", partition_offset, partition_scan);
+        if(strncmp(xtaf_buffer, "XTAF", 4) != 0){
+            continue;
         }
 
         partition_length = known_xtaf_lengths[itor];
