@@ -38,7 +38,7 @@ tsk_vs_xtaf_verifysb(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, unsigned int s
 
     /* Read in superblock. */
     /* NOTE: This is read as a char* instead of a xtaffs_sb to keep img_read() happy. */
-    cnt = tsk_img_read(img_info, offset * sector_size, (char *) xtafsb, xtafsb_len);
+    cnt = tsk_img_read(img_info, offset, (char *) xtafsb, xtafsb_len);
     /* Check for a failed read. */
     if (cnt != xtafsb_len) {
         tsk_fprintf(stderr, "tsk_vs_xtaf_verifysb: Failed to read at disk offset %" PRIuDADDR " bytes.\n", offset * sector_size);
