@@ -80,7 +80,8 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
     unsigned int sector_size;
     /* Offsets and lengths are hard-coded, except for the user data partition length. */
     /* Offsets are in bytes */
-    TSK_DADDR_T known_xtaf_offsets[] = {0x80000, 0x80080000, 0x10C080000, 0x118EB0000, 0x120eb0000, 0x130eb0000};
+//    TSK_DADDR_T known_xtaf_offsets[] = {0x80000, 0x80080000, 0x10C080000, 0x118EB0000, 0x120eb0000, 0x130eb0000};
+    TSK_DADDR_T known_xtaf_offsets[] = {1024, 4195328, 8782848, 9205120, 9467264, 9991552};
     /* Lengths are in sectors */
     TSK_DADDR_T known_xtaf_lengths[] = {4194304, 4587520, 422272 , 262144 , 524288 , 0};
     /* Partition labels c/o the Free60 Wiki: http://free60.org/FATX */
@@ -163,6 +164,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
                 break;
             }
         }
+        vs->part_count = 1;
 
         /* Populate partition struct and append to partition list. */
         part = tsk_vs_part_add(vs, partition_offset, partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
@@ -174,14 +176,14 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         partition_tally = 1;
     }else{
 
-
+        vs->part_count = 6;
         /* Loop through the known partition offsets, looking for XTAF file systems only by a sane XTAF superblock being present. */
         for (itor = 0; itor < 6; itor++) {
             /* Reset. */
             part = NULL;
             part_label = NULL;
     
-            partition_offset = known_xtaf_offsets[itor];
+            partition_offset = known_xtaf_offsets[itor]*512;
     
             /* Check to see if XTAF is at the location it should be */
             memset(xtaf_buffer, 0, sizeof(xtaf_buffer));
@@ -194,7 +196,6 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             /* Last partition will have variable size depending on the size of drive, this partition will run to the end of the drive */       
             if( partition_offset == 0x130eb0000){
                 partition_length = img_info->size - 0x130eb0000;
-                printf("Size of 6th partition = %"PRIu64"\n", partition_length);
             }
     
             if (0 == partition_length) {
@@ -233,7 +234,8 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
     
             /* Populate partition struct and append to partition list. */
-            part = tsk_vs_part_add(vs, partition_offset, partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
+            part = tsk_vs_part_add(vs, (partition_offset/512), partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
+//            part->start = (TSK_DADDR_T) partition_offset;
             if (NULL == part) {
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add partition %d to partition list.\n", itor);
                 break;
@@ -249,11 +251,12 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         return NULL;
     }
 
-    /* Denote unallocated space as "Unused" disk area. */
+    /* Denote unallocated space as "Unused" disk area. 
     if (tsk_vs_part_unused(vs)) {
         xtaf_close(vs);
         return NULL;
     }
+    */
 
     return vs;
 }
