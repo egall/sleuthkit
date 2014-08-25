@@ -1493,7 +1493,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstdatasect = xtaffs->firstclustsect;
         xtaffs->clustcnt = (TSK_DADDR_T) 14950175;
         xtaffs->lastclust = (TSK_DADDR_T) 14946525;
-        sectors = (0)/XTAF_SECTOR_SIZE;
+        sectors = partition_size;
     }
     else{
         free(fatsb);
