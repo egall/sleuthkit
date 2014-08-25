@@ -234,7 +234,7 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
             snprintf(part_label, XTAF_PART_LABEL_MAX_LENGTH, known_xtaf_labels[itor]);
     
             /* Populate partition struct and append to partition list. */
-            part = tsk_vs_part_add(vs, (partition_offset/512), partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
+            part = tsk_vs_part_add(vs, (partition_offset/(512)), partition_length, TSK_VS_PART_FLAG_ALLOC, part_label, 0, 0);
 //            part->start = (TSK_DADDR_T) partition_offset;
             if (NULL == part) {
                 tsk_fprintf(stderr, "tsk_vs_xtaf_open: Failed to add partition %d to partition list.\n", itor);
