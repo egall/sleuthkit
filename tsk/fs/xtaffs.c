@@ -1257,6 +1257,9 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     if ((xtaffs = (XTAFFS_INFO *) tsk_fs_malloc(sizeof(*xtaffs))) == NULL)
         return NULL;
 
+    if((fs = (TSK_FS_INFO *) tsk_fs_malloc(sizeof(*fs))) == NULL)
+        return NULL;
+
     fs = &(xtaffs->fs_info);
     fs->ftype = ftype;
 
