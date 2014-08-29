@@ -138,7 +138,6 @@ tsk_fs_open_img(TSK_IMG_INFO * a_img_info, TSK_OFF_T a_offset,
             if (set == NULL) {
                 set = "XTAF";
                 fs_set = fs_info;
-                return xtaffs_open(a_img_info, a_offset, a_ftype, 0);
             }
             else {
                 fs_set->close(fs_set);
