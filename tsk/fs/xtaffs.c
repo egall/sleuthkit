@@ -1418,61 +1418,51 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
         xtaffs->lastclust = (TSK_DADDR_T) 147891;
         sectors = (TSK_DADDR_T) (4194304);
-    }else if(img_info->size == 2147483648 || offset == 0x80000){
+    }else if(img_info->size == PART_ONE_SIZE_BYTES || offset == PART_ONE_OFFSET_BYTES){
 //        printf("Partition 0x80000\n");
-        xtaffs->rootsect = 528;
-        xtaffs->sectperfat = (uint32_t) 512;
-        xtaffs->firstclustsect = (TSK_DADDR_T) 592;
-//        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
-//        xtaffs->lastclust = (TSK_DADDR_T) 65527;
-        xtaffs->clustcnt = (TSK_DADDR_T) 131072;
-        xtaffs->lastclust = (TSK_DADDR_T) 131072;
-        sectors = (4194304);
+        xtaffs->rootsect = PART_ONE_ROOTSECT;
+        xtaffs->sectperfat = (uint32_t) PART_ONE_SECTPERFAT;
+        xtaffs->firstclustsect = (TSK_DADDR_T) PART_ONE_FIRSTCLUSTSECT;
+        xtaffs->clustcnt = (TSK_DADDR_T) PART_ONE_CLUSTCNT;
+        xtaffs->lastclust = (TSK_DADDR_T) PART_ONE_LASTCLUST;
+        sectors = PART_ONE_SECTORS;
 
-    }else if(img_info->size == 2348810240 || offset == 0x80080000){
+    }else if(img_info->size == PART_TWO_SIZE_BYTES || offset == PART_TWO_OFFSET_BYTES){
 //        printf("Partition 0x80080000\n");
-        xtaffs->rootsect = 2248;
-        xtaffs->sectperfat = (uint32_t) 2240;
-        xtaffs->firstclustsect = (TSK_DADDR_T) 2264;
-        xtaffs->clustcnt = (TSK_DADDR_T) 143360;
-        xtaffs->lastclust = (TSK_DADDR_T) 143360;
-//        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
-//        xtaffs->lastclust = (TSK_DADDR_T) 65527;
-        sectors = (4587520);
+        xtaffs->rootsect = PART_TWO_ROOTSECT;
+        xtaffs->sectperfat = (uint32_t) PART_TWO_SECTPERFAT;
+        xtaffs->firstclustsect = (TSK_DADDR_T) PART_TWO_FIRSTCLUSTSECT;
+        xtaffs->clustcnt = (TSK_DADDR_T) PART_TWO_CLUSTCNT;
+        xtaffs->lastclust = (TSK_DADDR_T) PART_TWO_LASTCLUST;
+        sectors = PART_TWO_SECTORS;
 
-    }else if(img_info->size == 216203264 || offset == 0x10C080000){
+    }else if(img_info->size == PART_THREE__SIZE_BYTES || offset == PART_THREE__OFFSET_BYTES){
 //        printf("Partition 0x10C080000\n");
-        xtaffs->rootsect = 64;
-        xtaffs->sectperfat = (uint32_t) 56;
-        xtaffs->firstclustsect = (TSK_DADDR_T) 96;
-//        xtaffs->clustcnt = (TSK_DADDR_T) 13196;
-//        xtaffs->lastclust = (TSK_DADDR_T) 13194;
-        xtaffs->clustcnt = (TSK_DADDR_T) 13192;
-        xtaffs->lastclust = (TSK_DADDR_T) 13192;
-        sectors = (422272);
+        xtaffs->rootsect = PART_THREE_ROOTSECT;
+        xtaffs->sectperfat = (uint32_t) PART_THREE_SECTPERFAT;
+        xtaffs->firstclustsect = (TSK_DADDR_T) PART_THREE_FIRSTCLUSTSECT;
+        xtaffs->clustcnt = (TSK_DADDR_T) PART_THREE_CLUSTCNT;
+        xtaffs->lastclust = (TSK_DADDR_T) PART_THREE_LASTCLUST;
+        sectors = PART_THREE_SECTORS;
 
-    }else if(img_info->size == 134217728 || offset == 0x118eb0000){
+    }else if(img_info->size == PART_FOUR_SIZE_BYTES || offset == PART_FOUR_OFFSET_BYTES){
 //        printf("Partition 0x118eb0000\n");
-        xtaffs->rootsect = 48;
-        xtaffs->sectperfat = (uint32_t) 40;
-        xtaffs->firstclustsect = (TSK_DADDR_T) 80;
-//        xtaffs->clustcnt = (TSK_DADDR_T) 8192;
-//        xtaffs->lastclust = (TSK_DADDR_T) 8190;
-        xtaffs->clustcnt = (TSK_DADDR_T) 8192;
-        xtaffs->lastclust = (TSK_DADDR_T) 8192;
-        sectors = (262144);
+        xtaffs->rootsect = PART_FOUR_ROOTSECT;
+        xtaffs->sectperfat = (uint32_t) PART_FOUR_SECTPERFAT;
+        xtaffs->firstclustsect = (TSK_DADDR_T) PART_FOUR_FIRSTCLUSTSECT;
+        xtaffs->clustcnt = (TSK_DADDR_T) PART_FOUR_CLUSTCNT;
+        xtaffs->lastclust = (TSK_DADDR_T) PART_FOUR_LASTCLUST;
+        sectors = PART_FOUR_SECTORS;
    
-    }else if(img_info->size == 268435456 || offset == 0x120eb0000){
+    }else if(img_info->size == PART_FIVE_SIZE_BYTES || offset == PART_FIVE_OFFSET_BYTES){
 //        printf("System partition\n");
-        xtaffs->rootsect = 80;
-        xtaffs->sectperfat = (uint32_t) 64;
-        xtaffs->firstclustsect = (TSK_DADDR_T) 112;
-//        xtaffs->clustcnt = (TSK_DADDR_T) 16384;
-//        xtaffs->lastclust = (TSK_DADDR_T) 16381;
-        xtaffs->clustcnt = (TSK_DADDR_T) 7009;
-        xtaffs->lastclust = (TSK_DADDR_T) 7009;
-        sectors = (224288);
-    }else if(img_info->size > 5115150336 || offset == 0x130eb0000){
+        xtaffs->rootsect = PART_FIVE_ROOTSECT;
+        xtaffs->sectperfat = (uint32_t) PART_FIVE_SECTPERFAT;
+        xtaffs->firstclustsect = (TSK_DADDR_T) PART_FIVE_FIRSTCLUSTSECT;
+        xtaffs->clustcnt = (TSK_DADDR_T) PART_FIVE_CLUSTCNT;
+        xtaffs->lastclust = (TSK_DADDR_T) PART_FIVE_LASTCLUST;
+        sectors = PART_FIVE_SECTORS;
+    }else if(img_info->size > PART_SIX_SIZE_BYTES_MIN  || offset == PART_SIX_OFFSET_BYTES){
         /* 5115150336 is the number of bytes of all the first five partitions combined.  An image larger than that would be of a disk, or of the user data partition. */
 //        printf("Data Partition\n");
 
@@ -1484,17 +1474,17 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
          *
          * That's it.
          */
-        if (offset == 0x130eb0000) {
+        if (offset == PART_SIX_OFFSET_BYTES) {
             partition_size = img_info->size - offset;
         } else {
             partition_size = img_info->size;
         }
-        xtaffs->rootsect = 116808; /*AJN TODO This fails on a non-250GB disk*/
-        xtaffs->sectperfat = (uint32_t) 116800;
-        xtaffs->firstclustsect = (TSK_DADDR_T) 116840;
+        xtaffs->rootsect = PART_SIX_ROOTSECT; /*AJN TODO This fails on a non-250GB disk*/
+        xtaffs->sectperfat = (uint32_t) PART_SIX_SECTPERFAT;
+        xtaffs->firstclustsect = (TSK_DADDR_T) PART_SIX_FIRSTCLUSTSECT;
         xtaffs->firstdatasect = xtaffs->firstclustsect;
-        xtaffs->clustcnt = (TSK_DADDR_T) 14946553;
-        xtaffs->lastclust = (TSK_DADDR_T) 14946553;
+        xtaffs->clustcnt = (TSK_DADDR_T) PART_SIX_CLUSTCNT;
+        xtaffs->lastclust = (TSK_DADDR_T) PART_SIX_LASTCLUST;
         sectors = partition_size/img_info->sector_size;
     }
     else{
