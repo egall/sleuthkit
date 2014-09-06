@@ -1417,7 +1417,6 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = 1240;
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
         xtaffs->lastclust = (TSK_DADDR_T) 147891;
-//        fs->last_inum = 7673128;
         sectors = (TSK_DADDR_T) (4194304);
     }else if(img_info->size == 2147483648 || offset == 0x80000){
 //        printf("Partition 0x80000\n");
@@ -1426,9 +1425,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = (TSK_DADDR_T) 592;
 //        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
 //        xtaffs->lastclust = (TSK_DADDR_T) 65527;
-        xtaffs->clustcnt = (TSK_DADDR_T) 131071;
+        xtaffs->clustcnt = (TSK_DADDR_T) 131072;
         xtaffs->lastclust = (TSK_DADDR_T) 131072;
-        fs->last_inum = 7673128;
         sectors = (4194304);
 
     }else if(img_info->size == 2348810240 || offset == 0x80080000){
@@ -1436,11 +1434,10 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->rootsect = 2248;
         xtaffs->sectperfat = (uint32_t) 2240;
         xtaffs->firstclustsect = (TSK_DADDR_T) 2264;
-        xtaffs->clustcnt = (TSK_DADDR_T) 143359;
+        xtaffs->clustcnt = (TSK_DADDR_T) 143360;
         xtaffs->lastclust = (TSK_DADDR_T) 143360;
 //        xtaffs->clustcnt = (TSK_DADDR_T) 65536;
 //        xtaffs->lastclust = (TSK_DADDR_T) 65527;
-//        fs->last_inum = 7673128;
         sectors = (4587520);
 
     }else if(img_info->size == 216203264 || offset == 0x10C080000){
@@ -1450,7 +1447,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = (TSK_DADDR_T) 96;
 //        xtaffs->clustcnt = (TSK_DADDR_T) 13196;
 //        xtaffs->lastclust = (TSK_DADDR_T) 13194;
-        xtaffs->clustcnt = (TSK_DADDR_T) 13191;
+        xtaffs->clustcnt = (TSK_DADDR_T) 13192;
         xtaffs->lastclust = (TSK_DADDR_T) 13192;
         sectors = (422272);
 
@@ -1461,7 +1458,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = (TSK_DADDR_T) 80;
 //        xtaffs->clustcnt = (TSK_DADDR_T) 8192;
 //        xtaffs->lastclust = (TSK_DADDR_T) 8190;
-        xtaffs->clustcnt = (TSK_DADDR_T) 8191;
+        xtaffs->clustcnt = (TSK_DADDR_T) 8192;
         xtaffs->lastclust = (TSK_DADDR_T) 8192;
         sectors = (262144);
    
@@ -1472,7 +1469,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = (TSK_DADDR_T) 112;
 //        xtaffs->clustcnt = (TSK_DADDR_T) 16384;
 //        xtaffs->lastclust = (TSK_DADDR_T) 16381;
-        xtaffs->clustcnt = (TSK_DADDR_T) 7008;
+        xtaffs->clustcnt = (TSK_DADDR_T) 7009;
         xtaffs->lastclust = (TSK_DADDR_T) 7009;
         sectors = (224288);
     }else if(img_info->size > 5115150336 || offset == 0x130eb0000){
@@ -1497,10 +1494,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = (TSK_DADDR_T) 116840;
         xtaffs->firstdatasect = xtaffs->firstclustsect;
         xtaffs->clustcnt = (TSK_DADDR_T) 14946553;
-        xtaffs->lastclust = (TSK_DADDR_T) 14946552;
-//        sectors = 478289698;
+        xtaffs->lastclust = (TSK_DADDR_T) 14946553;
         sectors = partition_size/img_info->sector_size;
-        printf("Partition size = %"PRIu64"\n", partition_size);
     }
     else{
         free(fatsb);
