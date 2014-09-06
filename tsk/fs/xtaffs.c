@@ -1247,6 +1247,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     // clean up any error messages that are lying around
     tsk_error_reset();
 
+    printf("offset = %"PRIu64"\n", offset);
+
     if (TSK_FS_TYPE_ISXTAF(ftype) == 0) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_ARG);
@@ -1494,9 +1496,11 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->sectperfat = (uint32_t) 116800;
         xtaffs->firstclustsect = (TSK_DADDR_T) 116840;
         xtaffs->firstdatasect = xtaffs->firstclustsect;
-        xtaffs->clustcnt = (TSK_DADDR_T) 14950175;
-        xtaffs->lastclust = (TSK_DADDR_T) 14946525;
-        sectors = partition_size;
+        xtaffs->clustcnt = (TSK_DADDR_T) 14946553;
+        xtaffs->lastclust = (TSK_DADDR_T) 14946552;
+//        sectors = 478289698;
+        sectors = partition_size/img_info->sector_size;
+        printf("Partition size = %"PRIu64"\n", partition_size);
     }
     else{
         free(fatsb);
