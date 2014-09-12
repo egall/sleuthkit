@@ -1243,6 +1243,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     uint8_t used_backup_boot = 0;       // set to 1 if we used the backup boot sector
     int is_xtaf = 0;
     TSK_OFF_T partition_size;
+    uint32_t sectperclust = 0;
 
     // clean up any error messages that are lying around
     tsk_error_reset();
@@ -1315,6 +1316,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         free(xtaffs);
         return NULL;
     }
+    printf("This partitions fatsb\nmagic = %s\nnumfat = %d\ncluster size = %d\n"PRIu32"\n",fatsb->magic, (uint32_t) fatsb->numfat, (uint32_t) fatsb->csize);
 
     fs->dev_bsize = img_info->sector_size;
 
@@ -1408,7 +1410,6 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                  the root sect?
     */
 
-
     /*AJN TODO BUG: img_info->size is an incorrect proxy for the partition size.*/
     if(img_info->size == 146413464 || img_info->size == 4712496640 || img_info->size == 4846714880){
 //        printf("Partition 1\n"); //AJN TODO These should be debug prints
@@ -1420,12 +1421,12 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         sectors = (TSK_DADDR_T) (4194304);
     }else if(img_info->size == PART_ONE_SIZE_BYTES || offset == PART_ONE_OFFSET_BYTES){
 //        printf("Partition 0x80000\n");
+        sectors = PART_ONE_SECTORS;
         xtaffs->rootsect = PART_ONE_ROOTSECT;
         xtaffs->sectperfat = (uint32_t) PART_ONE_SECTPERFAT;
         xtaffs->firstclustsect = (TSK_DADDR_T) PART_ONE_FIRSTCLUSTSECT;
         xtaffs->clustcnt = (TSK_DADDR_T) PART_ONE_CLUSTCNT;
         xtaffs->lastclust = (TSK_DADDR_T) PART_ONE_LASTCLUST;
-        sectors = PART_ONE_SECTORS;
 
     }else if(img_info->size == PART_TWO_SIZE_BYTES || offset == PART_TWO_OFFSET_BYTES){
 //        printf("Partition 0x80080000\n");
@@ -1447,21 +1448,60 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 
     }else if(img_info->size == PART_FOUR_SIZE_BYTES || offset == PART_FOUR_OFFSET_BYTES){
 //        printf("Partition 0x118eb0000\n");
+        sectors = PART_FOUR_SECTORS;
+
+
         xtaffs->rootsect = PART_FOUR_ROOTSECT;
         xtaffs->sectperfat = (uint32_t) PART_FOUR_SECTPERFAT;
         xtaffs->firstclustsect = (TSK_DADDR_T) PART_FOUR_FIRSTCLUSTSECT;
         xtaffs->clustcnt = (TSK_DADDR_T) PART_FOUR_CLUSTCNT;
+
         xtaffs->lastclust = (TSK_DADDR_T) PART_FOUR_LASTCLUST;
-        sectors = PART_FOUR_SECTORS;
    
     }else if(img_info->size == PART_FIVE_SIZE_BYTES || offset == PART_FIVE_OFFSET_BYTES){
 //        printf("System partition\n");
-        xtaffs->rootsect = PART_FIVE_ROOTSECT;
+        sectors = 268435456;
+        sectperclust = ((uint32_t) (fatsb->csize[0] << 24) | 
+                                 (uint32_t) (fatsb->csize[1] << 16) |
+                                 (uint32_t) (fatsb->csize[2] << 8)  | 
+                                 (uint32_t) (fatsb->csize[3]));
+
+        xtaffs->clustcnt = (TSK_DADDR_T) sectors/(sectperclust);
+//        xtaffs->clustcnt = (TSK_DADDR_T) PART_FIVE_CLUSTCNT;
+        xtaffs->lastclust = xtaffs->clustcnt - 1;
+//        xtaffs->lastclust = (TSK_DADDR_T) PART_FIVE_LASTCLUST;
+        uint8_t fatmult = 0;
+        uint32_t fatsize = 0;
+        uint32_t fatsects = 0;
+        uint32_t fatstart = 0;
+        uint32_t rootstart = 0;
+        printf("cluster count = %"PRIu64"\n", xtaffs->clustcnt); 
+        if(xtaffs->clustcnt >= 0xfff4) { 
+            xtaffs->mask = 0x0fffffff;
+            fatmult = 4;
+        } else {
+            xtaffs->mask = 0x0000ffff;
+            fatmult = 2;
+        }
+        printf("fatmult = %"PRIu32"\n", fatmult);
+//        printf("fatmult = %"PRIu8 "\nxtaffs->clustcnt = %"PRIu32"\n", fatmult, xtaffs->clustcnt);
+        fatsize = (uint32_t) xtaffs->clustcnt * fatmult;
+        if(fatsize % 4096 != 0)
+             fatsize = ((fatsize / 4096) + 1) * 4096;
+        fatsects = fatsize/512;
+        fatstart = 8;
+        rootstart = fatsects + fatstart;
+
+        printf("fatsize = %"PRIu32"\nfatsects = %"PRIu32"\nfatstart = %"PRIu32"\nrootstart = %"PRIu32"\n", fatsize, fatsects, fatstart, rootstart);
+         
         xtaffs->sectperfat = (uint32_t) PART_FIVE_SECTPERFAT;
+        xtaffs->sectperfat = fatsects;
+        printf("SECTPERFAT = %"PRIu32"\n", xtaffs->sectperfat);
+        xtaffs->rootsect = rootstart + 8;
+        xtaffs->firstclustsect = xtaffs->rootsect + sectperclust;
+        xtaffs->rootsect = PART_FIVE_ROOTSECT;
         xtaffs->firstclustsect = (TSK_DADDR_T) PART_FIVE_FIRSTCLUSTSECT;
-        xtaffs->clustcnt = (TSK_DADDR_T) PART_FIVE_CLUSTCNT;
         xtaffs->lastclust = (TSK_DADDR_T) PART_FIVE_LASTCLUST;
-        sectors = PART_FIVE_SECTORS;
     }else if(img_info->size > PART_SIX_SIZE_BYTES_MIN  || offset == PART_SIX_OFFSET_BYTES){
         /* 5115150336 is the number of bytes of all the first five partitions combined.  An image larger than that would be of a disk, or of the user data partition. */
 //        printf("Data Partition\n");
