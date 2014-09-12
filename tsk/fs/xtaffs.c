@@ -1466,7 +1466,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                                  (uint32_t) (fatsb->csize[2] << 8)  | 
                                  (uint32_t) (fatsb->csize[3]));
 
-        xtaffs->clustcnt = (TSK_DADDR_T) sectors/(sectperclust);
+        xtaffs->clustcnt = (TSK_DADDR_T) sectors/(512* sectperclust);
 //        xtaffs->clustcnt = (TSK_DADDR_T) PART_FIVE_CLUSTCNT;
         xtaffs->lastclust = xtaffs->clustcnt - 1;
 //        xtaffs->lastclust = (TSK_DADDR_T) PART_FIVE_LASTCLUST;
