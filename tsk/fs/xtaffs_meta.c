@@ -181,7 +181,6 @@ xtaffs_cleanup_ascii(char *name)
             name[i] = '^';
         }
     }
-    printf("name = %s\n", name);
 }
 
 
@@ -945,10 +944,8 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         end_inum_tmp = end_inum;
 
 
-    printf("End inum tmp = %"PRIu64"\n", end_inum_tmp);
     ssect = XTAFFS_INODE_2_SECT(xtaffs, start_inum);
     lsect = XTAFFS_INODE_2_SECT(xtaffs, end_inum_tmp);
-    printf("lsect = %"PRIu64"\n",lsect);
     lsect = lsect/512;
 
     if (ssect > fs->last_block) {
@@ -1411,7 +1408,6 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
     xtaffs = (XTAFFS_INFO *) fs;
 
     clust = ((TSK_DADDR_T *) fs_meta->content_ptr)[0];
-    printf("Clust = %"PRIu64"\n", clust);
 
     size_remain = roundup(fs_meta->size, xtaffs->csize * fs->block_size);
 
@@ -1749,7 +1745,7 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
             data_run->len += xtaffs->csize;
             full_len_s += xtaffs->csize;
             size_remain -= (xtaffs->csize * fs->block_size);
-
+            
             if ((int64_t) size_remain > 0) {
                 TSK_DADDR_T nxt;
                 if (xtaffs_getFAT(xtaffs, clust, &nxt)) {
