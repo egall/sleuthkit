@@ -42,6 +42,7 @@ dos2unixtime(uint16_t date, uint16_t time, uint8_t timetens)
     if (date == 0)
         return 0;
 */
+    uint16_t year = date >> 9;
 
     /* The time and date masks and shifts are from the py360 project */
     /* The year offset py360 used, 1980, differs from the offset C's mktime() needed, 80.*/
@@ -180,6 +181,7 @@ xtaffs_cleanup_ascii(char *name)
             name[i] = '^';
         }
     }
+    printf("name = %s\n", name);
 }
 
 
@@ -943,8 +945,11 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
         end_inum_tmp = end_inum;
 
 
+    printf("End inum tmp = %"PRIu64"\n", end_inum_tmp);
     ssect = XTAFFS_INODE_2_SECT(xtaffs, start_inum);
     lsect = XTAFFS_INODE_2_SECT(xtaffs, end_inum_tmp);
+    printf("lsect = %"PRIu64"\n",lsect);
+    lsect = lsect/512;
 
     if (ssect > fs->last_block) {
         tsk_error_reset();
@@ -1406,6 +1411,7 @@ xtaffs_make_data_run(TSK_FS_FILE * a_fs_file)
     xtaffs = (XTAFFS_INFO *) fs;
 
     clust = ((TSK_DADDR_T *) fs_meta->content_ptr)[0];
+    printf("Clust = %"PRIu64"\n", clust);
 
     size_remain = roundup(fs_meta->size, xtaffs->csize * fs->block_size);
 
