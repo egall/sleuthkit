@@ -33,6 +33,7 @@ tsk_vs_xtaf_verifysb(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, unsigned int s
     xtafsb = (xtaffs_sb*) tsk_malloc(xtafsb_len);
     if (NULL == xtafsb) {
         tsk_fprintf(stderr, "tsk_vs_xtaf_verifysb: Failed to allocate superblock for partition %d.\n");
+        free(xtafsb);
         return -ENOMEM;
     }
 
