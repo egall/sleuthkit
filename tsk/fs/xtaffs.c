@@ -1578,6 +1578,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     xtaffs->sectperfat = fatsects;
     xtaffs->rootsect = rootstart;
     xtaffs->firstclustsect = (TSK_DADDR_T) xtaffs->rootsect + sectperclust;
+    printf("rootsect = %"PRIu64"\nSectperfat = %"PRIu64"\nFirstclustsect = %"PRIu64"\nClustcnt = %"PRIu64"\nlastclust = %"PRIu64"\n", xtaffs->rootsect, xtaffs->sectperfat, xtaffs->firstclustsect, xtaffs->clustcnt, xtaffs->lastclust);
 //       printf("SECTPERFAT = %"PRIu32"\n", xtaffs->sectperfat);
 //        printf("firstsect = %"PRIu32"\nrootsect = %"PRIu32"\n", xtaffs->firstclustsect, xtaffs->rootsect);
 //        printf("fatsize = %"PRIu32"\nfatsects = %"PRIu32"\nfatstart = %"PRIu32"\nrootstart = %"PRIu32"\n", fatsize, fatsects, fatstart, rootstart);
@@ -1821,7 +1822,7 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
      * use these fields for sector calculations
      */
     fs->first_block = 0;
-    fs->block_count = sectors;
+    fs->block_count = sectors/512;
     fs->last_block = fs->last_block_act = fs->block_count - 1;
     fs->block_size = xtaffs->ssize;
 
