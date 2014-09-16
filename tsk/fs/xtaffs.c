@@ -1236,7 +1236,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     unsigned int len;
     TSK_FS_INFO *fs;
     xtaffs_sb *fatsb; /*AJN TODO How often does 'fatsb' occur? It shouldn't anymore.*/
-    TSK_DADDR_T sectors;
+    TSK_DADDR_T bytes_in_partition;
     ssize_t cnt;
     uint32_t fsopen_numfat, fsopen_csize;
     int i;
@@ -1422,10 +1422,10 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->firstclustsect = 1240;
         xtaffs->clustcnt = (TSK_DADDR_T) 147910; 
         xtaffs->lastclust = (TSK_DADDR_T) 147891;
-        sectors = (TSK_DADDR_T) (4194304);
+        bytes_in_partition = (TSK_DADDR_T) (4194304);
     }else if(img_info->size == PART_ONE_SIZE_BYTES || offset == PART_ONE_OFFSET_BYTES){
 //        printf("Partition 0x80000\n");
-        sectors = PART_ONE_SECTORS;
+        bytes_in_partition = PART_ONE_SECTORS;
 /*
         xtaffs->rootsect = PART_ONE_ROOTSECT;
         xtaffs->sectperfat = (uint32_t) PART_ONE_SECTPERFAT;
@@ -1443,7 +1443,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->clustcnt = (TSK_DADDR_T) PART_TWO_CLUSTCNT;
         xtaffs->lastclust = (TSK_DADDR_T) PART_TWO_LASTCLUST;
 */
-        sectors = PART_TWO_SIZE_BYTES;
+        bytes_in_partition = PART_TWO_SIZE_BYTES;
 
     }else if(img_info->size == PART_THREE_SIZE_BYTES || offset == PART_THREE_OFFSET_BYTES){
 //        printf("Partition 0x10C080000\n");
@@ -1454,11 +1454,11 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->clustcnt = (TSK_DADDR_T) PART_THREE_CLUSTCNT;
         xtaffs->lastclust = (TSK_DADDR_T) PART_THREE_LASTCLUST;
 */
-        sectors = PART_THREE_SIZE_BYTES;
+        bytes_in_partition = PART_THREE_SIZE_BYTES;
 
     }else if(img_info->size == PART_FOUR_SIZE_BYTES || offset == PART_FOUR_OFFSET_BYTES){
 //        printf("Partition 0x118eb0000\n");
-        sectors = PART_FOUR_SIZE_BYTES;
+        bytes_in_partition = PART_FOUR_SIZE_BYTES;
 
 
 /*
@@ -1472,7 +1472,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
    
     }else if(img_info->size == PART_FIVE_SIZE_BYTES || offset == PART_FIVE_OFFSET_BYTES){
 //        printf("System partition\n");
-        sectors = (TSK_DADDR_T) PART_FIVE_SIZE_BYTES;
+        bytes_in_partition = (TSK_DADDR_T) PART_FIVE_SIZE_BYTES;
 /*
         sectperclust = ((uint32_t) (fatsb->csize[0] << 24) | 
                                  (uint32_t) (fatsb->csize[1] << 16) |
@@ -1541,7 +1541,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         xtaffs->clustcnt = (TSK_DADDR_T) PART_SIX_CLUSTCNT;
         xtaffs->lastclust = (TSK_DADDR_T) PART_SIX_LASTCLUST;
 */
-        sectors = partition_size;
+        bytes_in_partition = partition_size;
     }
     else{
         free(fatsb);
@@ -1558,9 +1558,9 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                              (uint32_t) (fatsb->csize[2] << 8)  | 
                              (uint32_t) (fatsb->csize[3]));
 
-    xtaffs->clustcnt = (TSK_DADDR_T) sectors/(512*sectperclust);
+    xtaffs->clustcnt = (TSK_DADDR_T) bytes_in_partition/(512*sectperclust);
     xtaffs->lastclust = xtaffs->clustcnt - 1;
-//    printf("numberofbytes = %"PRIu64"\ncluster count = %"PRIu64"\n", sectors, xtaffs->clustcnt); 
+//    printf("numberofbytes = %"PRIu64"\ncluster count = %"PRIu64"\n", bytes_in_partition, xtaffs->clustcnt); 
     if(xtaffs->clustcnt >= 0xfff4) { 
         xtaffs->mask = 0x0fffffff;
         fatmult = 4;
@@ -1598,7 +1598,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             ("Not a XTAFFS file system (invalid sectors per FAT)");
         return NULL;
     }
-    if ((xtaffs->firstfatsect == 0) || (xtaffs->firstfatsect > sectors)) {
+    if ((xtaffs->firstfatsect == 0) || (xtaffs->firstfatsect > bytes_in_partition)) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
         tsk_error_set_errstr
@@ -1822,7 +1822,7 @@ AJN TODO Why did we comment this out? Is the numroot field missing?
      * use these fields for sector calculations
      */
     fs->first_block = 0;
-    fs->block_count = sectors/512;
+    fs->block_count = bytes_in_partition/512;
     fs->last_block = fs->last_block_act = fs->block_count - 1;
     fs->block_size = xtaffs->ssize;
 
