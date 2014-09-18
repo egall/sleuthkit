@@ -252,12 +252,11 @@ tsk_vs_xtaf_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset, uint8_t test)
         return NULL;
     }
 
-    /* Denote unallocated space as "Unused" disk area. 
+    /* Denote unallocated space as "Unused" disk area. */
     if (tsk_vs_part_unused(vs)) {
         xtaf_close(vs);
         return NULL;
     }
-    */
 
     return vs;
 }
