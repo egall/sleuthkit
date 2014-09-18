@@ -181,7 +181,6 @@ xtaffs_cleanup_ascii(char *name)
             name[i] = '^';
         }
     }
-    printf("name = %s\n", name);
 }
 
 
@@ -482,7 +481,7 @@ xtaffs_make_root(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta)
         addr_ptr[0] = 1;
 
         cnum = 0;
-        while ((clust) && (0 == XTAFFS_ISEOF(clust, XTAFFS_32_MASK))) {
+        while ((clust) && (0 == XTAFFS_ISEOF(clust, xtaffs->mask))) {
             TSK_DADDR_T nxt;
 
             /* Make sure we do not get into an infinite loop */
@@ -538,7 +537,6 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
         if(i >= 63){printf("de->name = %s\n", de->name);return 0;
                    }
         if(de->name[0] == 'C' && de->name[1] == 'o' && de->name[2] == 'm'){
-            printf("de name = %s\n", de->name);
         }
         // the basic test is only for the 'essential data'.
         if (a_basic == 0) {
@@ -659,9 +657,6 @@ xtaffs_isdentry(XTAFFS_INFO * xtaffs, xtaffs_dentry * de, uint8_t a_basic)
                 fprintf(stderr,
                     "xtaffs_isdentry: nearly all values zero\n");
             return 0;
-        }
-        if(de->name[0] == 'C' && de->name[1] == 'o' && de->name[2] == 'm'){
-            printf("de name = %s\n", de->name);
         }
 
 
