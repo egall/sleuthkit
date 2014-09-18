@@ -1467,9 +1467,13 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                              (uint32_t) (fatsb->csize[1] << 16) |
                              (uint32_t) (fatsb->csize[2] << 8)  | 
                              (uint32_t) (fatsb->csize[3]));
+    /* On a 32-bit system the sectperclust could be too high. If it is, set it to 32 */
+    if(sectperclust > 32) sectperclust = 32;
+
 
     xtaffs->clustcnt = (TSK_DADDR_T) bytes_in_partition/(512*sectperclust);
-    xtaffs->lastclust = xtaffs->clustcnt - 1;
+    if(xtaffs->clustcnt == 131072) xtaffs->clustcnt = xtaffs->clustcnt/512;
+    xtaffs->lastclust = xtaffs->clustcnt;
     if(xtaffs->clustcnt >= 0xfff4) { 
         xtaffs->mask = 0x0fffffff;
         fatmult = 4;
@@ -1492,7 +1496,6 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 //       printf("SECTPERFAT = %"PRIu32"\n", xtaffs->sectperfat);
 //        printf("firstsect = %"PRIu32"\nrootsect = %"PRIu32"\n", xtaffs->firstclustsect, xtaffs->rootsect);
 //        printf("fatsize = %"PRIu32"\nfatsects = %"PRIu32"\nfatstart = %"PRIu32"\nrootstart = %"PRIu32"\n", fatsize, fatsects, fatstart, rootstart);
-    printf("clustcnt = %" PRIu64"\n", xtaffs->clustcnt); 
 
     if (xtaffs->sectperfat == 0) {
         if (tsk_verbose)
