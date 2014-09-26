@@ -1467,8 +1467,6 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                              (uint32_t) (fatsb->csize[1] << 16) |
                              (uint32_t) (fatsb->csize[2] << 8)  | 
                              (uint32_t) (fatsb->csize[3]));
-    /* On a 32-bit system the sectperclust could be too high. If it is, set it to 32 */
-    if(sectperclust > 32) sectperclust = 32;
 
 
     xtaffs->clustcnt = (TSK_DADDR_T) bytes_in_partition/(512*sectperclust);
