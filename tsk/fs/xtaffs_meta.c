@@ -511,6 +511,65 @@ xtaffs_make_root(XTAFFS_INFO * xtaffs, TSK_FS_META * fs_meta)
     return 0;
 }
 
+/**
+* \internal
+ * Create an FS_INODE structure for the FAT tables.
+ *
+ * @param fatfs File system to analyze
+ * @param a_which 1 or 2 to choose between defining FAT1 or FAT2
+ * @param fs_meta Inode structure to copy file information into.
+ * @return 1 on error and 0 on success
+ */
+uint8_t
+xtaffs_make_fat(XTAFFS_INFO * fatfs, uint8_t a_which, TSK_FS_META * fs_meta)
+{
+    TSK_FS_INFO *fs = (TSK_FS_INFO *) fatfs;
+    TSK_DADDR_T *addr_ptr;
+
+    fs_meta->type = TSK_FS_META_TYPE_VIRT;
+    fs_meta->mode = 0;
+    fs_meta->nlink = 1;
+
+    fs_meta->flags = (TSK_FS_META_FLAG_USED | TSK_FS_META_FLAG_ALLOC);
+    fs_meta->uid = fs_meta->gid = 0;
+    fs_meta->mtime = fs_meta->atime = fs_meta->ctime = fs_meta->crtime = 0;
+    fs_meta->mtime_nano = fs_meta->atime_nano = fs_meta->ctime_nano =
+        fs_meta->crtime_nano = 0;
+
+    if (fs_meta->name2 == NULL) {
+        if ((fs_meta->name2 = (TSK_FS_META_NAME_LIST *)
+                tsk_malloc(sizeof(TSK_FS_META_NAME_LIST))) == NULL)
+            return 1;
+        fs_meta->name2->next = NULL;
+    }
+
+    if (a_which == 1) {
+        fs_meta->addr = XTAFFS_FAT1INO(fs);
+        strncpy(fs_meta->name2->name, XTAFFS_FAT1NAME,
+            TSK_FS_META_NAME_LIST_NSIZE);
+        addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
+        addr_ptr[0] = fatfs->firstfatsect;
+    }
+    else if (a_which == 2) {
+        fs_meta->addr = XTAFFS_FAT2INO(fs);
+        strncpy(fs_meta->name2->name, XTAFFS_FAT2NAME,
+            TSK_FS_META_NAME_LIST_NSIZE);
+        addr_ptr = (TSK_DADDR_T *) fs_meta->content_ptr;
+        addr_ptr[0] = fatfs->firstfatsect + fatfs->sectperfat;
+    }
+    else {
+        ////@@@
+    }
+
+    fs_meta->attr_state = TSK_FS_META_ATTR_EMPTY;
+    if (fs_meta->attr) {
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+    }
+
+    fs_meta->size = fatfs->sectperfat * fs->block_size;
+
+    return 0;
+}
 
 
 /* 
@@ -1243,8 +1302,19 @@ xtaffs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum,
             int retval;
 
             tsk_fs_meta_reset(fs_file->meta);
-
-            if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
+            if (inum == XTAFFS_FAT1INO(fs)) {
+                if (xtaffs_make_fat(xtaffs, 1, fs_file->meta)) {
+                    tsk_fs_file_close(fs_file);
+                    return 1;
+                }
+            }
+            else if (inum == XTAFFS_FAT2INO(fs)) {
+                if (xtaffs_make_fat(xtaffs, 2, fs_file->meta)) {
+                    tsk_fs_file_close(fs_file);
+                    return 1;
+                }
+            }
+            else if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
                 if (tsk_fs_dir_make_orphan_dir_meta(fs, fs_file->meta)) {
                     tsk_fs_file_close(fs_file);
                     return 1;
@@ -1315,6 +1385,18 @@ xtaffs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,
     /* As there is no real root inode in FAT, use the made up one */
     if (inum == XTAFFS_ROOTINO) {
         if (xtaffs_make_root(xtaffs, a_fs_file->meta))
+            return 1;
+        else
+            return 0;
+    }
+    else if (inum == XTAFFS_FAT1INO(fs)) {
+        if (xtaffs_make_fat(xtaffs, 1, a_fs_file->meta))
+            return 1;
+        else
+            return 0;
+    }
+    else if (inum == XTAFFS_FAT2INO(fs)) {
+        if (xtaffs_make_fat(xtaffs, 2, a_fs_file->meta))
             return 1;
         else
             return 0;
