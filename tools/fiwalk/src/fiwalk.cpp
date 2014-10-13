@@ -317,7 +317,7 @@ void file_infot(const string name,time_t t0, TSK_FS_TYPE_ENUM ftype)
 {
 	const char * tm_format = NULL;
 	
-	if(TSK_FS_TYPE_ISFAT(ftype) || TSK_FS_TYPE_ISXTAF(ftype))
+	if(TSK_FS_TYPE_ISFAT(ftype))
 	{
 #ifdef _MSC_VER
 	    tm_format="%Y-%m-%dT%H:%M:%S";
