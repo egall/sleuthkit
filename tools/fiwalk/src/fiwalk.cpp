@@ -317,7 +317,7 @@ void file_infot(const string name,time_t t0, TSK_FS_TYPE_ENUM ftype)
 {
 	const char * tm_format = NULL;
 	
-	if(TSK_FS_TYPE_ISFAT(ftype)|| TSK_FS_TYPE_ISXTAF(ftype))
+	if(TSK_FS_TYPE_ISFAT(ftype) || TSK_FS_TYPE_ISXTAF(ftype))
 	{
 #ifdef _MSC_VER
 	    tm_format="%Y-%m-%dT%H:%M:%S";
@@ -343,6 +343,15 @@ void file_infot(const string name,time_t t0, TSK_FS_TYPE_ENUM ftype)
 	{
 		if (!name.compare("atime"))
 			x->xmlout(name,buf,"prec=\"86400\"", false);
+		if (!name.compare("mtime"))
+			x->xmlout(name,buf,"prec=\"2\"", false);
+		if (!name.compare("crtime"))
+			x->xmlout(name,buf,"prec=\"2\"", false);
+	}
+	else if(TSK_FS_TYPE_ISXTAF(ftype))
+	{
+		if (!name.compare("atime"))
+			x->xmlout(name,buf,"prec=\"2\"", false);
 		if (!name.compare("mtime"))
 			x->xmlout(name,buf,"prec=\"2\"", false);
 		if (!name.compare("crtime"))
