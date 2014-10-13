@@ -275,6 +275,20 @@ process_tsk_file(TSK_FS_FILE * fs_file, const char *path)
            if(fs_file->meta->atime) file_infot("atime",fs_file->meta->atime);
            if(fs_file->meta->crtime) file_infot("crtime",fs_file->meta->crtime);
     	}
+        if(TSK_FS_TYPE_ISXTAF(fs_file->fs_info->ftype))
+    	{
+           if(fs_file->meta->mtime) file_infot("mtime",fs_file->meta->mtime, fs_file->fs_info->ftype);
+           if(fs_file->meta->ctime) file_infot("ctime",fs_file->meta->ctime, fs_file->fs_info->ftype);
+           if(fs_file->meta->atime) file_infot("atime",fs_file->meta->atime, fs_file->fs_info->ftype);
+           if(fs_file->meta->crtime) file_infot("crtime",fs_file->meta->crtime, fs_file->fs_info->ftype);
+        }
+    	else{
+           if(fs_file->meta->mtime) file_infot("mtime",fs_file->meta->mtime);
+           if(fs_file->meta->ctime) file_infot("ctime",fs_file->meta->ctime);
+           if(fs_file->meta->atime) file_infot("atime",fs_file->meta->atime);
+           if(fs_file->meta->crtime) file_infot("crtime",fs_file->meta->crtime);
+    	}
+
     
         /* TK: do content_ptr */
         if(fs_file->meta->seq!=0) file_info("seq",fs_file->meta->seq);
