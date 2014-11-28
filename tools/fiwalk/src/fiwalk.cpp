@@ -695,31 +695,13 @@ int main(int argc, char * const *argv1)
     /* output per-run metadata for XML output */
     if(x){
 	/* Output Dublin Core information */
-<<<<<<< HEAD
 	x->push("dfxml",
-||||||| merged common ancestors
-	x->push("dfxml","version='1.0'");
-	x->push("metadata",
-=======
-        //AJN TODO Only add the XTAF namespace declaration if we're running on XTAF storage.
-	x->push("dfxml",
->>>>>>> for_sleuthkit-xtafb2
 		"\n  xmlns='http://www.forensicswiki.org/wiki/Category:Digital_Forensics_XML'"
-<<<<<<< HEAD
-		"\n  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'"
-		"\n  xmlns:dc='http://purl.org/dc/elements/1.1/'"
-		"\n  version='1.0'" );
-	x->push("metadata", "");
-||||||| merged common ancestors
-		"\n  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' "
-		"\n  xmlns:dc='http://purl.org/dc/elements/1.1/'" );
-=======
 		"\n  xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'"
 		"\n  xmlns:xtaf='http://www.forensicswiki.org/wiki/XTAF'"
 		"\n  xmlns:dc='http://purl.org/dc/elements/1.1/'"
 		"\n  version='1.0'" );
 	x->push("metadata", "");
->>>>>>> for_sleuthkit-xtafb2
 	x->xmlout("dc:type","Disk Image",fw_empty,false);
 	x->pop();
 	    

@@ -4,13 +4,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
 
-<<<<<<< HEAD
 AC_INIT(sleuthkit, 4.1.3)
-||||||| merged common ancestors
-AC_INIT(sleuthkit, 4.0.2)
-=======
-AC_INIT(sleuthkit, 4.0.2[]xtafb1)
->>>>>>> for_sleuthkit-xtafb2
 m4_include([m4/ax_pthread.m4])
 dnl include the version from 1.12.1. This will work for 
 m4_include([m4/cppunit.m4])
@@ -20,18 +14,8 @@ m4_include([m4/ac_prog_javac.m4])
 m4_include([m4/ac_prog_java_works.m4])
 m4_include([m4/ac_prog_java.m4])
 
-<<<<<<< HEAD
 AC_CONFIG_SRCDIR([tsk/base/tsk_base.h])
 AC_CONFIG_HEADERS([tsk/tsk_config.h])
-||||||| merged common ancestors
-
-AC_CONFIG_SRCDIR([tsk3/base/tsk_base.h])
-AM_CONFIG_HEADER([tsk3/tsk_config.h])
-=======
-
-AC_CONFIG_SRCDIR([tsk/base/tsk_base.h])
-AC_CONFIG_HEADERS([tsk/tsk_config.h])
->>>>>>> for_sleuthkit-xtafb2
 AC_CONFIG_AUX_DIR(config)
 AM_INIT_AUTOMAKE([foreign])
 AM_PATH_CPPUNIT(1.12.1)
@@ -89,7 +73,6 @@ AC_FUNC_SELECT_ARGTYPES
 dnl AC_FUNC_STAT
 AC_FUNC_UTIME_NULL
 AC_FUNC_VPRINTF
-<<<<<<< HEAD
 dnl AC_CHECK_FUNCS([dup2 gethostname isascii iswprint memset munmap regcomp select setlocale strcasecmp strchr strdup strerror strndup strrchr strtol strtoul strtoull utime wcwidth])
 AC_CHECK_FUNCS([ishexnumber err errx warn warnx vasprintf getrusage])
 AC_CHECK_FUNCS([strlcpy strlcat])
@@ -102,28 +85,6 @@ AX_PTHREAD([
     CC="$PTHREAD_CC"],[])
 
 dnl Not all compilers include /usr/local in the include and link path
-||||||| merged common ancestors
-#AC_CHECK_FUNCS([dup2 gethostname isascii iswprint memset munmap regcomp select setlocale strcasecmp strchr strdup strerror strndup strrchr strtol strtoul strtoull utime wcwidth])
-AC_CHECK_FUNCS([ishexnumber err errx warn warnx vasprintf])
-AX_PTHREAD( [
-            AC_DEFINE(HAVE_PTHREAD,1,[Define if you have POSIX threads libraries and header files.])
-            CLIBS="$PTHREAD_LIBS $LIBS"
-            CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-            LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
-            CC="$PTHREAD_CC"],[])
-# Not all compilers include /usr/local in the include and link path
-=======
-dnl AC_CHECK_FUNCS([dup2 gethostname isascii iswprint memset munmap regcomp select setlocale strcasecmp strchr strdup strerror strndup strrchr strtol strtoul strtoull utime wcwidth])
-AC_CHECK_FUNCS([ishexnumber err errx warn warnx vasprintf])
-AC_CHECK_FUNCS([strlcpy strlcat])
-AX_PTHREAD( [
-            AC_DEFINE(HAVE_PTHREAD,1,[Define if you have POSIX threads libraries and header files.])
-            CLIBS="$PTHREAD_LIBS $LIBS"
-            CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
-            LDFLAGS="$LDFLAGS $PTHREAD_CFLAGS"
-            CC="$PTHREAD_CC"],[])
-# Not all compilers include /usr/local in the include and link path
->>>>>>> for_sleuthkit-xtafb2
 if test -d /usr/local/include; then
     CPPFLAGS="$CPPFLAGS -I/usr/local/include"
     LDFLAGS="$LDFLAGS -L/usr/local/lib"
@@ -253,7 +214,6 @@ dnl sqlite requires pthread libraries - this was copied from its configure.ac
 dnl AC_SEARCH_LIBS(pthread_create, pthread)
 AC_SEARCH_LIBS(dlopen, dl)
 
-<<<<<<< HEAD
 dnl Test for the various java things that we need for bindings
 AS_IF([test "x$enable_java" != "xno"], [
     dnl javac is needed to compile the JAR file
@@ -343,155 +303,6 @@ AC_CONFIG_FILES([
     unit_tests/Makefile
     unit_tests/base/Makefile])
 
-||||||| merged common ancestors
-# Test for java/jni so that we can compile the java bindings
-AC_PROG_JAVAC
-if test "x$JAVAC" != x; then
-    AX_JNI_INCLUDE_DIR
-    for JNI_INCLUDE_DIR in $JNI_INCLUDE_DIRS
-    do
-        JNI_CPPFLAGS="$JNI_CPPFLAGS -I$JNI_INCLUDE_DIR"
-    done
-    # Export the paths so that the makefile gets them
-    AC_SUBST(JNI_CPPFLAGS, $JNI_CPPFLAGS)
-fi
-AM_CONDITIONAL([X_JNI],[test "x$JNI_CPPFLAGS" != x])
-
-AC_CONFIG_COMMANDS([tsk3/tsk_incs.h],
-        [
-          echo "#ifndef _TSK_INCS_H" > tsk3/tsk_incs.h
-          echo "#define _TSK_INCS_H" >> tsk3/tsk_incs.h
-          echo "// automatically by ./configure" >> tsk3/tsk_incs.h
-          echo "// Contains the config.h data needed by programs that use libtsk" >> tsk3/tsk_incs.h
-          echo "" >> tsk3/tsk_incs.h
-          if test x$ac_cv_header_unistd_h = xyes; then
-            echo "#include <unistd.h>" >> tsk3/tsk_incs.h
-          fi
-          if test x$ac_cv_header_inttypes_h = xyes; then
-            echo "#ifndef __STDC_FORMAT_MACROS" >> tsk3/tsk_incs.h
-            echo "#define  __STDC_FORMAT_MACROS" >> tsk3/tsk_incs.h
-            echo "#endif" >> tsk3/tsk_incs.h
-            echo "#include <inttypes.h>" >> tsk3/tsk_incs.h
-          fi
-          if test x$ac_cv_header_sys_param_h = xyes; then
-            echo "#include <sys/param.h>" >> tsk3/tsk_incs.h
-          fi
-
-          if test x$ax_pthread_ok = xyes; then
-            echo "#define TSK_MULTITHREAD_LIB // set because we have pthreads" >> tsk3/tsk_incs.h
-          fi
-
-          echo "" >> tsk3/tsk_incs.h
-          echo "#endif" >> tsk3/tsk_incs.h
-        ],
-        [
-          ac_cv_header_unistd_h=$ac_cv_header_unistd_h
-          ac_cv_header_inttypes_h=$ac_cv_header_inttypes_h
-          ac_cv_header_sys_param_h=$ac_cv_header_sys_param_h
-          ax_pthread_ok=$ax_pthread_ok
-        ])
-
-AC_CONFIG_FILES([Makefile
-                 tsk3/Makefile
-                 tsk3/base/Makefile
-                 tsk3/img/Makefile
-                 tsk3/vs/Makefile
-                 tsk3/fs/Makefile
-                 tsk3/hashdb/Makefile
-                 tsk3/auto/Makefile
-                 tools/Makefile
-                 tools/imgtools/Makefile
-                 tools/vstools/Makefile
-                 tools/fstools/Makefile
-                 tools/hashtools/Makefile
-                 tools/srchtools/Makefile
-                 tools/autotools/Makefile
-                 tools/sorter/Makefile
-                 tools/timeline/Makefile
-		 tools/fiwalk/Makefile
-		 tools/fiwalk/src/Makefile
-		 tools/fiwalk/plugins/Makefile
-                 tests/Makefile
-                 samples/Makefile
-                 man/Makefile
-                 bindings/java/jni/Makefile
-                 unit_tests/Makefile
-                 unit_tests/base/Makefile])
-=======
-# Test for java/jni so that we can compile the java bindings
-AC_PROG_JAVAC
-if test "x$JAVAC" != x; then
-    AX_JNI_INCLUDE_DIR
-    for JNI_INCLUDE_DIR in $JNI_INCLUDE_DIRS
-    do
-        JNI_CPPFLAGS="$JNI_CPPFLAGS -I$JNI_INCLUDE_DIR"
-    done
-    # Export the paths so that the makefile gets them
-    AC_SUBST(JNI_CPPFLAGS, $JNI_CPPFLAGS)
-fi
-AM_CONDITIONAL([X_JNI],[test "x$JNI_CPPFLAGS" != x])
-
-AC_CONFIG_COMMANDS([tsk/tsk_incs.h],
-        [
-          echo "#ifndef _TSK_INCS_H" > tsk/tsk_incs.h
-          echo "#define _TSK_INCS_H" >> tsk/tsk_incs.h
-          echo "// automatically by ./configure" >> tsk/tsk_incs.h
-          echo "// Contains the config.h data needed by programs that use libtsk" >> tsk/tsk_incs.h
-          echo "" >> tsk/tsk_incs.h
-          if test x$ac_cv_header_unistd_h = xyes; then
-            echo "#include <unistd.h>" >> tsk/tsk_incs.h
-          fi
-          if test x$ac_cv_header_inttypes_h = xyes; then
-            echo "#ifndef __STDC_FORMAT_MACROS" >> tsk/tsk_incs.h
-            echo "#define  __STDC_FORMAT_MACROS" >> tsk/tsk_incs.h
-            echo "#endif" >> tsk/tsk_incs.h
-            echo "#include <inttypes.h>" >> tsk/tsk_incs.h
-          fi
-          if test x$ac_cv_header_sys_param_h = xyes; then
-            echo "#include <sys/param.h>" >> tsk/tsk_incs.h
-          fi
-
-          if test x$ax_pthread_ok = xyes; then
-            echo "#define TSK_MULTITHREAD_LIB // set because we have pthreads" >> tsk/tsk_incs.h
-          fi
-
-          echo "" >> tsk/tsk_incs.h
-          echo "#endif" >> tsk/tsk_incs.h
-        ],
-        [
-          ac_cv_header_unistd_h=$ac_cv_header_unistd_h
-          ac_cv_header_inttypes_h=$ac_cv_header_inttypes_h
-          ac_cv_header_sys_param_h=$ac_cv_header_sys_param_h
-          ax_pthread_ok=$ax_pthread_ok
-        ])
-
-AC_CONFIG_FILES([Makefile
-                 tsk/Makefile
-                 tsk/base/Makefile
-                 tsk/img/Makefile
-                 tsk/vs/Makefile
-                 tsk/fs/Makefile
-                 tsk/hashdb/Makefile
-                 tsk/auto/Makefile
-                 tools/Makefile
-                 tools/imgtools/Makefile
-                 tools/vstools/Makefile
-                 tools/fstools/Makefile
-                 tools/hashtools/Makefile
-                 tools/srchtools/Makefile
-                 tools/autotools/Makefile
-                 tools/sorter/Makefile
-                 tools/timeline/Makefile
-		 tools/fiwalk/Makefile
-		 tools/fiwalk/src/Makefile
-		 tools/fiwalk/plugins/Makefile
-                 tests/Makefile
-                 samples/Makefile
-                 man/Makefile
-                 bindings/java/jni/Makefile
-                 unit_tests/Makefile
-                 unit_tests/base/Makefile])
->>>>>>> for_sleuthkit-xtafb2
 AC_OUTPUT
 
 dnl Print a summary

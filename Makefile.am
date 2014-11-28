@@ -46,7 +46,6 @@ EXTRA_DIST = README_win32.txt README.txt INSTALL.txt ChangeLog.txt NEWS.txt \
     framework/SampleConfig/*.xml \
     framework/docs/* \
     framework/man/* \
-<<<<<<< HEAD
     framework/tools/tsk_analyzeimg/Makefile.am \
     framework/tools/tsk_analyzeimg/*.cpp \
     framework/tools/tsk_validatepipeline/Makefile.am \
@@ -55,23 +54,6 @@ EXTRA_DIST = README_win32.txt README.txt INSTALL.txt ChangeLog.txt NEWS.txt \
     framework/msvcpp/*/*.vcxproj \
     framework/msvcpp/*/*.sln \
     framework/msvcpp/Makefile
-||||||| merged common ancestors
-    framework/tsk_analyzeimg/*.cpp \
-    framework/tsk_validatepipeline/*.cpp \
-    framework/win32/*/*.vcproj \
-    framework/win32/*/*.sln \
-    framework/win32/Makefile
-
-CLEANFILES = tsk3/tsk_incs.h
-=======
-    framework/tsk_analyzeimg/*.cpp \
-    framework/tsk_validatepipeline/*.cpp \
-    framework/win32/*/*.vcproj \
-    framework/win32/*/*.sln \
-    framework/win32/Makefile
-
-CLEANFILES = tsk/tsk_incs.h
->>>>>>> for_sleuthkit-xtafb2
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -86,14 +68,7 @@ if X_JNI
 else   
   JAVA_BINDINGS=
 endif
-<<<<<<< HEAD
-||||||| merged common ancestors
-SUBDIRS = tsk3 tools tests samples man $(UNIT_TESTS) $(JNI)
-=======
-SUBDIRS = tsk tools tests samples man $(UNIT_TESTS) $(JNI)
->>>>>>> for_sleuthkit-xtafb2
 
-<<<<<<< HEAD
 SUBDIRS = tsk tools tests samples man $(UNIT_TESTS) $(JAVA_BINDINGS) 
 
 nobase_include_HEADERS = tsk/libtsk.h tsk/tsk_incs.h \
@@ -104,25 +79,6 @@ nobase_include_HEADERS = tsk/libtsk.h tsk/tsk_incs.h \
     tsk/fs/tsk_fs.h tsk/fs/tsk_ffs.h tsk/fs/tsk_ext2fs.h tsk/fs/tsk_fatfs.h \
     tsk/fs/tsk_ntfs.h tsk/fs/tsk_iso9660.h tsk/fs/tsk_hfs.h tsk/fs/tsk_yaffs.h \
     tsk/hashdb/tsk_hashdb.h tsk/auto/tsk_auto.h
-||||||| merged common ancestors
-nobase_include_HEADERS = tsk3/libtsk.h tsk3/tsk_incs.h \
-    tsk3/base/tsk_base.h tsk3/base/tsk_os.h \
-    tsk3/img/tsk_img.h tsk3/vs/tsk_vs.h \
-    tsk3/vs/tsk_bsd.h tsk3/vs/tsk_dos.h tsk3/vs/tsk_gpt.h \
-    tsk3/vs/tsk_mac.h tsk3/vs/tsk_sun.h \
-    tsk3/fs/tsk_fs.h tsk3/fs/tsk_ffs.h tsk3/fs/tsk_ext2fs.h tsk3/fs/tsk_fatfs.h \
-    tsk3/fs/tsk_ntfs.h tsk3/fs/tsk_iso9660.h tsk3/fs/tsk_hfs.h \
-    tsk3/hashdb/tsk_hashdb.h tsk3/auto/tsk_auto.h
-=======
-nobase_include_HEADERS = tsk/libtsk.h tsk/tsk_incs.h \
-    tsk/base/tsk_base.h tsk/base/tsk_os.h \
-    tsk/img/tsk_img.h tsk/vs/tsk_vs.h \
-    tsk/vs/tsk_bsd.h tsk/vs/tsk_dos.h tsk/vs/tsk_gpt.h \
-    tsk/vs/tsk_mac.h tsk/vs/tsk_sun.h \
-    tsk/fs/tsk_fs.h tsk/fs/tsk_ffs.h tsk/fs/tsk_ext2fs.h tsk/fs/tsk_fatfs.h \
-    tsk/fs/tsk_ntfs.h tsk/fs/tsk_iso9660.h tsk/fs/tsk_hfs.h tsk/fs/tsk_xtaffs.h \
-    tsk/hashdb/tsk_hashdb.h tsk/auto/tsk_auto.h
->>>>>>> for_sleuthkit-xtafb2
 
 nobase_dist_data_DATA = tsk/sorter/default.sort tsk/sorter/freebsd.sort \
     tsk/sorter/images.sort tsk/sorter/linux.sort tsk/sorter/openbsd.sort \

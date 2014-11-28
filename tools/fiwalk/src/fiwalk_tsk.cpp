@@ -23,14 +23,8 @@
 #include "arff.h"
 #include "plugin.h"
 #include "unicode_escape.h"
-<<<<<<< HEAD
-#include "tsk/fs/tsk_fatfs.h"
-||||||| merged common ancestors
-#include "tsk3/fs/tsk_fatfs.h"
-=======
 #include "tsk/fs/tsk_fatfs.h"
 #include "tsk/fs/tsk_xtaffs.h"
->>>>>>> for_sleuthkit-xtafb2
 
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
