@@ -788,6 +788,10 @@ extern "C" {
         TSK_FS_TYPE_EXT4 = 0x00002000,  ///< Ext4 file system
         TSK_FS_TYPE_YAFFS2 = 0x00004000,        ///< YAFFS2 file system
         TSK_FS_TYPE_YAFFS2_DETECT = 0x00004000, ///< YAFFS2 auto detection
+        TSK_FS_TYPE_XTAF12 = 0x00020000,  ///< XTAF12 file system
+        TSK_FS_TYPE_XTAF16 = 0x00040000,  ///< XTAF16 file system
+        TSK_FS_TYPE_XTAF32 = 0x00080000,  ///< XTAF32 file system
+        TSK_FS_TYPE_XTAF_DETECT = 0x000e0000,  ///< XTAF auto detection
         TSK_FS_TYPE_UNSUPP = 0xffffffff,        ///< Unsupported file system
     };
     /* NOTE: Update bindings/java/src/org/sleuthkit/datamodel/TskData.java
@@ -807,6 +811,13 @@ extern "C" {
     * is for a FAT file system. */
 #define TSK_FS_TYPE_ISFAT(ftype) \
     (((ftype) & TSK_FS_TYPE_FAT_DETECT)?1:0)
+
+    /**
+    * \ingroup fslib
+    * Macro that takes a file system type and returns 1 if the type
+    * is for a XTAF file system. */
+#define TSK_FS_TYPE_ISXTAF(ftype) \
+    (((ftype) & TSK_FS_TYPE_XTAF_DETECT)?1:0)
 
     /**
     * \ingroup fslib

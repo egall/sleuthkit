@@ -54,7 +54,15 @@ static FS_TYPES fs_type_table[] = {
     {"ext4", TSK_FS_TYPE_EXT4, "Ext4"},
     {"ufs1", TSK_FS_TYPE_FFS1, "UFS1"},
     {"ufs2", TSK_FS_TYPE_FFS2, "UFS2"},
+<<<<<<< HEAD:tsk/fs/fs_types.c
     {"yaffs2", TSK_FS_TYPE_YAFFS2, "YAFFS2"},
+||||||| merged common ancestors
+=======
+    {"xtaf", TSK_FS_TYPE_XTAF_DETECT, "XTAF (Auto Detection)"},
+    {"xtaf12", TSK_FS_TYPE_XTAF12, "XTAF12"},
+    {"xtaf16", TSK_FS_TYPE_XTAF16, "XTAF16"},
+    {"xtaf32", TSK_FS_TYPE_XTAF32, "XTAF32"},
+>>>>>>> for_sleuthkit-xtafb2:tsk/fs/fs_types.c
     {0},
 };
 

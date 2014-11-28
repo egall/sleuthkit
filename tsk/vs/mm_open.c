@@ -50,20 +50,43 @@ tsk_vs_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset,
      * will not be reported
      */
     if (type == TSK_VS_TYPE_DETECT) {
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_open: Detecting volume system type.\n");
         TSK_VS_INFO *vs, *vs_set = NULL;
         char *set = NULL;
 
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_open: Trying tsk_vs_dos_open.\n");
         if ((vs = tsk_vs_dos_open(img_info, offset, 1)) != NULL) {
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_open: tsk_vs_dos_open succeeded.\n");
             set = "DOS";
             vs_set = vs;
         }
         else {
             tsk_error_reset();
         }
+
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_open: Trying tsk_vs_xtaf_open.\n");
+        if ((vs = tsk_vs_xtaf_open(img_info, offset, 0)) != NULL) {
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_open: tsk_vs_xtaf_open succeeded.\n");
+            set = "XTAF";
+            vs_set = vs;
+        }
+        else {
+            tsk_error_reset();
+        }
+
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_open: Trying tsk_vs_bsd_open.\n");
         if ((vs = tsk_vs_bsd_open(img_info, offset)) != NULL) {
             // if (set == NULL) {
             // In this case, BSD takes priority because BSD partitions start off with
             // the DOS magic value in the first sector with the boot code.
+            if (tsk_verbose)
+                tsk_fprintf(stderr, "tsk_vs_open: tsk_vs_bsd_open succeeded.\n");
             set = "BSD";
             vs_set = vs;
             /*
@@ -171,10 +194,14 @@ tsk_vs_open(TSK_IMG_INFO * img_info, TSK_DADDR_T offset,
         return vs_set;
     }
     else {
+        if (tsk_verbose)
+            tsk_fprintf(stderr, "tsk_vs_open: Testing volume system type.\n");
 
         switch (type) {
         case TSK_VS_TYPE_DOS:
             return tsk_vs_dos_open(img_info, offset, 0);
+        case TSK_VS_TYPE_XTAF:
+            return tsk_vs_xtaf_open(img_info, offset, 0);
         case TSK_VS_TYPE_MAC:
             return tsk_vs_mac_open(img_info, offset);
         case TSK_VS_TYPE_BSD:

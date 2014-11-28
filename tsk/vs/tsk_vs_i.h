@@ -25,6 +25,7 @@
 #include <sys/types.h>
 
 extern TSK_VS_INFO *tsk_vs_dos_open(TSK_IMG_INFO *, TSK_DADDR_T, uint8_t);
+extern TSK_VS_INFO *tsk_vs_xtaf_open(TSK_IMG_INFO *, TSK_DADDR_T, uint8_t);
 extern TSK_VS_INFO *tsk_vs_mac_open(TSK_IMG_INFO *, TSK_DADDR_T);
 extern TSK_VS_INFO *tsk_vs_bsd_open(TSK_IMG_INFO *, TSK_DADDR_T);
 extern TSK_VS_INFO *tsk_vs_sun_open(TSK_IMG_INFO *, TSK_DADDR_T);

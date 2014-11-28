@@ -23,7 +23,14 @@
 #include "arff.h"
 #include "plugin.h"
 #include "unicode_escape.h"
+<<<<<<< HEAD
 #include "tsk/fs/tsk_fatfs.h"
+||||||| merged common ancestors
+#include "tsk3/fs/tsk_fatfs.h"
+=======
+#include "tsk/fs/tsk_fatfs.h"
+#include "tsk/fs/tsk_xtaffs.h"
+>>>>>>> for_sleuthkit-xtafb2
 
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
@@ -436,6 +443,12 @@ int proc_fs(TSK_IMG_INFO * img_info, TSK_OFF_T start)
     }
     else {
 	dir_walk_flags |= TSK_FS_DIR_WALK_FLAG_UNALLOC;
+    }
+
+    /*Special Processing for XTAF to report root offset*/
+    if(TSK_FS_TYPE_ISXTAF(fs_info->ftype))
+    {
+        partition_info("xtaf:root_directory_offset",((XTAFFS_INFO *)fs_info)->rootsect * 512);
     }
 
     int ret = 0;
