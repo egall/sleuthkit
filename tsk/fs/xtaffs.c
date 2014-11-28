@@ -1463,10 +1463,7 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 
     xtaffs->firstfatsect = XTAF_FIRST_FAT_SECT;
-    sectperclust = ((uint32_t) (fatsb->csize[0] << 24) | 
-                             (uint32_t) (fatsb->csize[1] << 16) |
-                             (uint32_t) (fatsb->csize[2] << 8)  | 
-                             (uint32_t) (fatsb->csize[3]));
+    sectperclust = (uint32_t)  tsk_getu32(fs->endian, fatsb->csize);
 
     xtaffs->clustcnt = (TSK_DADDR_T) bytes_in_partition/(512*sectperclust);
     if(xtaffs->clustcnt == 131072) xtaffs->clustcnt = xtaffs->clustcnt/512;
