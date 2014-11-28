@@ -1469,7 +1469,8 @@ xtaffs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                              (uint32_t) (fatsb->csize[3]));
 
     xtaffs->clustcnt = (TSK_DADDR_T) bytes_in_partition/(512*sectperclust);
-    xtaffs->lastclust = xtaffs->clustcnt - 1;
+    if(xtaffs->clustcnt == 131072) xtaffs->clustcnt = xtaffs->clustcnt/512;
+    xtaffs->lastclust = xtaffs->clustcnt;
     if(xtaffs->clustcnt >= 0xfff4) { 
         xtaffs->mask = 0x0fffffff;
         fatmult = 4;
